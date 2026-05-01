@@ -1,4 +1,10 @@
+<div align="center">
+
 # 🚀 FixFleet
+
+### **Auto-fix GitLab bugs with AI agents — bring your own CLI or free API.**
+
+*Reads open `Bug` issues from GitLab → parses stack traces and steps → pre-narrows the search to relevant files → dispatches to your AI agent of choice → scores the fix's confidence. All locally. No commits. No lock-in.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
@@ -6,10 +12,16 @@
 [![Stdlib only](https://img.shields.io/badge/dependencies-stdlib%20only-success.svg)](#-quick-start)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-ff69b4.svg)](#-contributing)
 
-> **Fleet of AI agents fixing GitLab bugs.**
-> Multi-CLI · Multi-API · Token-aware.
+**One command. Any AI. Zero waste.**
 
-Pick any AI coding agent you have access to (Claude Code, Codex, Gemini CLI, Cursor Agent, Aider, Qwen Code) **or** any free OpenAI-compatible API (Groq, Gemini, OpenRouter, Cerebras, Ollama, LM Studio) — and let FixFleet auto-fix open bug issues from GitLab, all locally.
+`Claude Code` · `Codex` · `Gemini CLI` · `Cursor Agent` · `Aider` · `Qwen Code` · `Groq` · `Gemini API` · `OpenRouter` · `Cerebras` · `Ollama` · `LM Studio`
+
+</div>
+
+---
+
+> 🎯 **What this tool does in one sentence:**
+> *Pulls open bug tickets from GitLab, hands each one to an AI coding agent with the right context already pre-loaded, and scores how confident the fix is — so you only review the ones worth reviewing.*
 
 Built by **Yash Koladiya**.
 
