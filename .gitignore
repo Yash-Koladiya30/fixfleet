@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.python-version
+
+# Tests / coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+
+# bugfixer-specific — local config / state files (may contain API keys, tokens, paths)
+.bugfixer.json
+.bugfixer-state.json
+*.bugfixer.json
+*.bugfixer-state.json
+
+# Anything that looks like a secret
+.env
+.env.*
+*.token
+*.key
+*.pem
+secrets.*
+credentials.*
+*-secret.*
+*-credentials.*
+
+# GitLab CI artifacts
+.gitlab/
+artifacts/
+
+# Logs
+*.log
+logs/
