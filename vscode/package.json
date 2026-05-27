@@ -2,8 +2,8 @@
   "name": "fixfleet",
   "displayName": "FixFleet — AI GitLab Bug Fixer",
   "description": "Auto-fix GitLab bugs with AI agents — Claude, Codex, Gemini, Cursor, Aider, Qwen, or any OpenAI-compatible API. Premium UI.",
-  "version": "0.1.0",
-  "publisher": "yashkoladiya",
+  "version": "0.1.1",
+  "publisher": "YashKoladiya30",
   "icon": "media/icon.png",
   "license": "GPL-3.0-or-later",
   "engines": {
@@ -34,11 +34,7 @@
     "url": "https://github.com/Yash-Koladiya30/fixfleet-vscode/issues"
   },
   "main": "./out/extension.js",
-  "activationEvents": [
-    "onView:fixfleet.bugs",
-    "onCommand:fixfleet.refresh",
-    "onCommand:fixfleet.openSettings"
-  ],
+  "activationEvents": [],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
