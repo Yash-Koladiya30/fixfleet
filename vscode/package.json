@@ -2,7 +2,7 @@
   "name": "fixfleet",
   "displayName": "FixFleet — AI GitLab Bug Fixer",
   "description": "Auto-fix GitLab bugs with AI agents — Claude, Codex, Gemini, Cursor, Aider, Qwen, or any OpenAI-compatible API. Premium UI.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "YashKoladiya30",
   "icon": "media/icon.png",
   "license": "GPL-3.0-or-later",
@@ -48,19 +48,14 @@
     "views": {
       "fixfleet": [
         {
+          "type": "webview",
           "id": "fixfleet.bugs",
-          "name": "Open Bugs",
+          "name": "FixFleet",
           "icon": "media/sidebar-icon.svg",
-          "contextualTitle": "FixFleet — GitLab Bugs"
+          "contextualTitle": "FixFleet"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "fixfleet.bugs",
-        "contents": "🚀 **Welcome to FixFleet**\n\nAuto-fix GitLab bugs with any AI agent.\n\n[⚙️ Configure FixFleet](command:fixfleet.openSettings)\n\n[🔄 Refresh Bugs](command:fixfleet.refresh)\n\n_First time? Click Configure to set your GitLab token, project, and AI backend._"
-      }
-    ],
     "commands": [
       {
         "command": "fixfleet.refresh",
@@ -115,18 +110,7 @@
           "group": "navigation@2"
         }
       ],
-      "view/item/context": [
-        {
-          "command": "fixfleet.fixBug",
-          "when": "view == fixfleet.bugs && viewItem == bug",
-          "group": "inline@1"
-        },
-        {
-          "command": "fixfleet.openInBrowser",
-          "when": "view == fixfleet.bugs && viewItem == bug",
-          "group": "inline@2"
-        }
-      ]
+      "view/item/context": []
     },
     "configuration": {
       "title": "FixFleet",

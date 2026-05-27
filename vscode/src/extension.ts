@@ -2,47 +2,25 @@
  * FixFleet VSCode extension entry point.
  */
 import * as vscode from 'vscode';
-import { BugProvider, BugTreeItem } from './bugProvider';
 import { BugPanel } from './bugPanel';
 import { SettingsPanel } from './settingsPanel';
+import { FixFleetWebView } from './welcomeView';
 import { checkCliInstalled } from './fixfleetCli';
 
 let statusBar: vscode.StatusBarItem;
 
-export async function activate(context: vscode.ExtensionContext) {
-    const provider = new BugProvider();
-    vscode.window.registerTreeDataProvider('fixfleet.bugs', provider);
+export function activate(context: vscode.ExtensionContext) {
+    // ── Register commands FIRST (before any async ops) ─────────
+    // This guarantees the sidebar buttons work even during slow CLI checks.
 
-    statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusBar.command = 'fixfleet.openSettings';
-    statusBar.text = '$(rocket) FixFleet';
-    statusBar.tooltip = 'Open FixFleet';
-    statusBar.show();
-    context.subscriptions.push(statusBar);
-
-    // Initial CLI check
-    const cliStatus = await checkCliInstalled();
-    if (!cliStatus.installed) {
-        const choice = await vscode.window.showWarningMessage(
-            'FixFleet CLI not installed. Install it now?',
-            'Install',
-            'Open Settings',
-        );
-        if (choice === 'Install') {
-            vscode.commands.executeCommand('fixfleet.installCli');
-        } else if (choice === 'Open Settings') {
-            vscode.commands.executeCommand('fixfleet.openSettings');
-        }
-    } else {
-        statusBar.tooltip = `FixFleet CLI ${cliStatus.version || ''} ready`;
-    }
-
-    // ── Commands ───────────────────────────────────────────────
+    const webview = new FixFleetWebView(context);
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('fixfleet.refresh', async () => {
-            provider.refresh();
-            const bugs = provider.getBugs();
+        vscode.window.registerWebviewViewProvider(FixFleetWebView.viewType, webview),
+
+        vscode.commands.registerCommand('fixfleet.refresh', () => {
+            webview.refresh();
+            const bugs = webview.getBugs();
             statusBar.text = `$(rocket) FixFleet · ${bugs.length} bugs`;
         }),
 
@@ -51,25 +29,16 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
 
         vscode.commands.registerCommand('fixfleet.openBug', (bug: any) => {
-            BugPanel.createOrShow(context, bug);
+            if (bug) BugPanel.createOrShow(context, bug);
         }),
 
-        vscode.commands.registerCommand('fixfleet.fixBug', async (item: BugTreeItem | undefined) => {
-            if (!item || !item.bug) {
-                vscode.window.showErrorMessage('Right-click a bug in the FixFleet sidebar.');
-                return;
-            }
-            BugPanel.createOrShow(context, item.bug);
-            // Auto-fix
-            setTimeout(() => {
-                // post fix message via webview is simpler from inside BugPanel
-            }, 200);
+        vscode.commands.registerCommand('fixfleet.fixBug', (bug: any) => {
+            if (bug) BugPanel.createOrShow(context, bug);
         }),
 
-        vscode.commands.registerCommand('fixfleet.openInBrowser', (item: BugTreeItem | undefined) => {
-            if (item?.bug?.web_url) {
-                vscode.env.openExternal(vscode.Uri.parse(item.bug.web_url));
-            }
+        vscode.commands.registerCommand('fixfleet.openInBrowser', (arg: any) => {
+            const url = arg?.web_url || arg?.bug?.web_url;
+            if (url) vscode.env.openExternal(vscode.Uri.parse(url));
         }),
 
         vscode.commands.registerCommand('fixfleet.checkInstall', async () => {
@@ -83,7 +52,7 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        vscode.commands.registerCommand('fixfleet.installCli', async () => {
+        vscode.commands.registerCommand('fixfleet.installCli', () => {
             const terminal = vscode.window.createTerminal('Install FixFleet CLI');
             terminal.show();
             terminal.sendText(
@@ -92,16 +61,41 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('Installing FixFleet CLI in terminal…');
         }),
 
-        // React to config changes
+        // Refresh sidebar on config changes
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('fixfleet')) {
-                provider.refresh();
+                webview.refresh();
             }
         }),
     );
 
-    // Initial fetch
-    setTimeout(() => provider.refresh(), 500);
+    // ── Status bar ─────────────────────────────────────────────
+
+    statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    statusBar.command = 'fixfleet.openSettings';
+    statusBar.text = '$(rocket) FixFleet';
+    statusBar.tooltip = 'Open FixFleet';
+    statusBar.show();
+    context.subscriptions.push(statusBar);
+
+    // ── Async CLI check (does NOT block command registration) ──
+
+    checkCliInstalled().then(cliStatus => {
+        if (!cliStatus.installed) {
+            vscode.window
+                .showWarningMessage(
+                    'FixFleet CLI not installed. Install it now?',
+                    'Install',
+                    'Open Settings',
+                )
+                .then(choice => {
+                    if (choice === 'Install') vscode.commands.executeCommand('fixfleet.installCli');
+                    else if (choice === 'Open Settings') vscode.commands.executeCommand('fixfleet.openSettings');
+                });
+        } else {
+            statusBar.tooltip = `FixFleet CLI ${cliStatus.version || ''} ready`;
+        }
+    });
 }
 
 export function deactivate() {
