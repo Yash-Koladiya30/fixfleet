@@ -1,367 +1,221 @@
 <div align="center">
 
-# 🚀 FixFleet
+<img src="vscode/media/icon.png" alt="FixFleet" width="140" />
 
-### **Auto-fix GitLab bugs with AI agents — bring your own CLI or free API.**
+# FixFleet
 
-*Reads open `Bug` issues from GitLab → parses stack traces and steps → pre-narrows the search to relevant files → dispatches to your AI agent of choice → scores the fix's confidence. All locally. No commits. No lock-in.*
+### Auto-fix GitLab bugs with AI agents — directly in VSCode.
 
-[![PyPI version](https://img.shields.io/pypi/v/fixfleet.svg)](https://pypi.org/project/fixfleet/)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-54%20passing-brightgreen.svg)](#-testing)
-[![Stdlib only](https://img.shields.io/badge/dependencies-stdlib%20only-success.svg)](#-quick-start)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-ff69b4.svg)](#-contributing)
+*Reads open `Bug` issues, parses stack traces, pre-narrows the search to the right files, dispatches to your AI of choice, and scores fix confidence. All local. No commits. Bring your own AI.*
 
-**One command. Any AI. Zero waste.**
+<p>
+  <a href="https://pypi.org/project/fixfleet/"><img src="https://img.shields.io/pypi/v/fixfleet.svg?label=pypi&color=2D6A4F&style=for-the-badge" alt="PyPI" /></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=YashKoladiya30.fixfleet"><img src="https://img.shields.io/visual-studio-marketplace/v/YashKoladiya30.fixfleet?label=vscode&color=722F37&style=for-the-badge" alt="VSCode Marketplace" /></a>
+  <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/license-GPL_v3-C8A47E?style=for-the-badge" alt="License GPL v3" /></a>
+  <img src="https://img.shields.io/badge/python-3.9+-1F2421?style=for-the-badge" alt="Python 3.9+" />
+</p>
 
-`Claude Code` · `Codex` · `Gemini CLI` · `Cursor Agent` · `Aider` · `Qwen Code` · `Groq` · `Gemini API` · `OpenRouter` · `Cerebras` · `Ollama` · `LM Studio`
+<p>
+  <a href="#-install"><b>Install</b></a> •
+  <a href="#-how-it-works"><b>How it works</b></a> •
+  <a href="#-supported-ai-agents"><b>AI backends</b></a> •
+  <a href="#-faq"><b>FAQ</b></a>
+</p>
 
 </div>
 
 ---
 
-> 🎯 **What this tool does in one sentence:**
-> *Pulls open bug tickets from GitLab, hands each one to an AI coding agent with the right context already pre-loaded, and scores how confident the fix is — so you only review the ones worth reviewing.*
+## 📦 Install
 
-Built by **Yash Koladiya**.
+### 🪄 VSCode Extension (recommended — premium UI)
 
----
+<a href="https://marketplace.visualstudio.com/items?itemName=YashKoladiya30.fixfleet"><img src="https://img.shields.io/badge/Install_from_Marketplace-722F37?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="Install from VSCode Marketplace" /></a>
 
-## ✨ What it does
+Or paste in terminal:
+```bash
+code --install-extension YashKoladiya30.fixfleet
+```
 
-1. Fetches **open issues with the `Bug` label** from any GitLab project (gitlab.com or self-hosted).
-2. Parses each issue body — pulling out **Description, Steps to Reproduce, Expected/Actual behavior, Logs, Stack Traces** automatically.
-3. Pre-narrows the search space: extracts file paths, stack frames, symbols → **ranks candidate files in your local repo** so the AI doesn't waste tokens hunting.
-4. Dispatches the structured prompt to your chosen AI agent (CLI or API).
-5. Computes a **confidence score** for the fix using diff metrics + model self-rating + hedge-density.
-6. Tracks **token usage per backend per day** so you don't blow through paid quotas.
-7. **Never commits or pushes** — leaves the working tree dirty for human review.
-
----
-
-## 🚀 Quick start
-
-Pure stdlib — **no runtime dependencies**. Works on Python 3.9+.
-
-### 🟢 Recommended — `pip install --user` (universal, no extra tools)
+### 🐍 Python CLI (terminal-only users)
 
 ```bash
 pip3 install --user fixfleet
-```
-
-Then **add `fixfleet` to PATH so the command works from any directory** (one-time setup):
-
-**zsh (default on macOS):**
-```bash
-echo 'export PATH="$(python3 -m site --user-base)/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-```
-
-**bash (Linux / older macOS):**
-```bash
-echo 'export PATH="$(python3 -m site --user-base)/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-**fish:**
-```bash
-fish_add_path (python3 -m site --user-base)/bin
-```
-
-Then run:
-```bash
 fixfleet
 ```
 
-> 💡 **Don't want to edit PATH?** Run directly via Python module — works anywhere, anytime:
+> ⚠️ If `fixfleet: command not found` — add user-bin to PATH:
 > ```bash
-> python3 -m bugfixer.cli
+> echo 'export PATH="$(python3 -m site --user-base)/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 > ```
 
 ---
 
-### 🔵 Alternative — `pipx` (isolated, recommended if you use pipx already)
+## ⚡ Quick start (60 seconds)
 
-```bash
-pipx install fixfleet
-fixfleet
-```
-
-> ⚠️ **Known issue:** If `pipx install` fails with `ensurepip` error on Python 3.14, run:
-> ```bash
-> rm -rf ~/.local/pipx/shared
-> pipx install --python python3.12 fixfleet
-> ```
-> Python 3.14 just released and Homebrew's `ensurepip` is broken in fresh installs. Falling back to 3.12 fixes it.
+1. **Install** the VSCode extension (1 click above)
+2. **Get a GitLab token** at https://gitlab.com → Settings → Access Tokens (scope: `read_api`)
+3. **Click 🚀 FixFleet icon** in VSCode activity bar → **Configure** → paste token + project URL → save
+4. **Click any bug** in sidebar → premium detail panel opens
+5. **Click ✨ Fix This Bug with AI** → AI agent reads the code, fixes the bug, scores confidence
+6. **Review the diff, commit yourself** — FixFleet never commits or pushes
 
 ---
 
-### 🟣 Other install methods
+## 🧠 How it works
 
-**`uv tool`** — fastest, modern:
-```bash
-uv tool install fixfleet
-fixfleet
+```
+┌─ Open GitLab bug issue
+│
+├─ Parse: description, steps, expected/actual, stack traces, logs
+│
+├─ Locate: extract file paths, symbols, stack frames → rank candidates → inline top file
+│
+├─ Dispatch to AI agent (Claude / Codex / Gemini / Cursor / Aider / Qwen / any free API)
+│
+├─ Score confidence: diff focus + self-rating + file relevance + hedge density
+│
+└─ Done — local-only changes ready for your review
 ```
 
-**One-shot run** (no install):
-```bash
-uvx --from fixfleet fixfleet
-```
+**Token-aware**: per-issue, session, and daily budgets prevent paid-plan overruns.
 
-**From GitHub** (latest dev, not PyPI):
-```bash
-pip3 install --user git+https://github.com/Yash-Koladiya30/fixfleet.git
-```
+**Multi-backend**: detected CLI agents shown as installed; pick one per session.
 
-**Clone + run** (for hacking on the code):
-```bash
-git clone https://github.com/Yash-Koladiya30/fixfleet.git
-cd fixfleet
-python3 fix_bugs.py
-```
+**Confidence scored**: every fix gets a 0.0–1.0 score so you know which to review first.
 
 ---
 
-### 🔄 Upgrade
+## 🤖 Supported AI agents
 
-```bash
-pip3 install --user --upgrade fixfleet    # if installed with pip
-pipx upgrade fixfleet                     # if installed with pipx
-uv tool upgrade fixfleet                  # if installed with uv
-```
+### CLI backends (uses your existing paid plans)
 
-### 🗑️ Uninstall
-
-```bash
-pip3 uninstall fixfleet      # for pip install
-pipx uninstall fixfleet      # for pipx install
-uv tool uninstall fixfleet   # for uv install
-```
-
----
-
-### ❓ Troubleshooting install
-
-| Symptom | Fix |
+| Agent | Plan source |
 |---|---|
-| `zsh: command not found: fixfleet` after `pip install --user` | PATH not set — see "add to PATH" step above, **or** just use `python3 -m bugfixer.cli` |
-| `pipx install` fails with `ensurepip` error | Python 3.14 bug — run `rm -rf ~/.local/pipx/shared && pipx install --python python3.12 fixfleet` |
-| `pip: command not found` | Use `pip3` instead of `pip` |
-| `python3: command not found` | Install Python 3.9+ — `brew install python3` (macOS) or `apt install python3` (Linux) |
-| Want to verify install path | `python3 -m site --user-base` shows where pip `--user` installs |
+| 🟪 **Claude Code** | Claude Pro / Max |
+| 🟢 **Codex** | ChatGPT Plus / Pro |
+| 🟦 **Gemini CLI** | Google AI free tier |
+| ⚫ **Cursor Agent** | Cursor Pro |
+| 🟧 **Aider** | Bring your own key |
+| 🟨 **Qwen Code** | Alibaba free tier |
 
----
+### API backends (free-tier friendly)
 
-## 🔌 Backend options
+One OpenAI-compatible client serves all:
 
-You need **at least one** of these. Mix and match per session.
-
-### CLI backends (use existing paid plans)
-
-| CLI | Install | Login | Plan source |
-|---|---|---|---|
-| **Claude Code** | `npm i -g @anthropic-ai/claude-code` | `claude login` | Claude Pro/Max |
-| **Codex** | `npm i -g @openai/codex` | `codex login` | ChatGPT Plus/Pro |
-| **Gemini CLI** | `npm i -g @google/gemini-cli` | `gemini auth` | Google account (free tier) |
-| **Cursor Agent** | install from cursor.sh | `cursor-agent login` | Cursor Pro |
-| **Aider** | `pip install aider-chat` | API key | Bring your own |
-| **Qwen Code** | `npm i -g @qwen-code/qwen-code` | OAuth or key | Free tier |
-
-### API backends (free tier-friendly)
-
-Single OpenAI-compatible client serves all of these:
-
-| Provider | Free? | Get key |
+| Provider | Free | Get key |
 |---|---|---|
-| **Groq** | ✅ Free, fast (~500 tok/s) | https://console.groq.com/keys |
-| **Google Gemini** | ✅ Free tier, big quota | https://aistudio.google.com/apikey |
-| **OpenRouter** | ✅ Many free models | https://openrouter.ai/keys |
-| **Cerebras** | ✅ Free tier | https://cloud.cerebras.ai |
-| **Ollama** | ✅ Local, no key, offline | https://ollama.com |
-| **LM Studio** | ✅ Local, no key | https://lmstudio.ai |
+| **Groq** | ✅ | https://console.groq.com/keys |
+| **Google Gemini** | ✅ | https://aistudio.google.com/apikey |
+| **OpenRouter** | ✅ | https://openrouter.ai/keys |
+| **Cerebras** | ✅ | https://cloud.cerebras.ai |
+| **Ollama** (local) | ✅ | https://ollama.com |
+| **LM Studio** (local) | ✅ | https://lmstudio.ai |
 
 ---
 
-## 🔑 Generating a GitLab token
+## 🎯 Why FixFleet
 
-1. Go to **gitlab.com → top-right avatar → Edit profile → Access Tokens**.
-2. Create a Personal Access Token with scope: **`api`** or **`read_api`**.
-3. Copy the `glpat-...` token. GitLab shows it **once**.
-4. Paste when FixFleet asks. Typing is hidden via `getpass`.
+### vs. doing it manually
+Triages 50 bugs in the time it takes you to read 5.
 
-> ⚠️ **Never commit tokens.** This repo's `.gitignore` already excludes `.env`, `*.token`, `secrets.*`, and the local config files (`~/.bugfixer.json`, `~/.bugfixer-state.json` are stored in your home dir, NOT in the repo).
+### vs. AI inside the issue (e.g. GitLab Duo)
+- **Costs nothing extra** — uses AI plans you already pay for
+- **Edits actual files locally**, not just comments
+- **You pick the AI** — not locked to one vendor
+- **Works on private/self-hosted GitLab** without exposing source to a SaaS
 
----
-
-## 🧭 Flow
-
-```
-Step 0  Choose Backend         → pick installed CLI or configure API
-Step 1  GitLab Token           → paste glpat-...
-Step 2  GitLab Project         → paste full URL (or short path / numeric ID)
-Step 3  Local Project Dir      → path to cloned repo on your Mac
-Step 4  Date Filter            → YYYY-MM-DD or Enter for all
-Step 5  Fetching Issues        → auto-paginated
-Step 6  Select Issues          → 1,3,5  |  all  |  unfixed  |  q
-        → fixes each, shows budget + confidence per issue
-```
-
-After Step 0/2/3, defaults save to `~/.bugfixer.json` — next run press Enter to reuse.
-
-### Inputs accepted at Step 2
-
-| Input | Auto-extracts |
-|---|---|
-| `https://gitlab.com/group/project` | gitlab.com host + path |
-| `https://gitlab.com/group/project.git` | strips `.git` |
-| `https://gitlab.com/g/p/-/issues` | strips UI suffix |
-| `git@gitlab.com:group/project.git` | SSH form |
-| `https://gitlab.example.com/team/repo` | self-hosted host |
-| `group/project` | short form |
-| `12345` | numeric ID |
+### vs. running Claude/Codex CLI manually
+- **Structured prompts** — extracts steps/logs automatically
+- **Pre-narrows file scope** — saves 60–80% tokens
+- **Confidence scoring** — review only uncertain fixes
+- **Budget caps** — never blows through paid quotas
 
 ---
 
-## 🎯 Confidence + Semantic Scoring
+## ❓ FAQ
 
-Every fix gets graded:
+<details>
+<summary><b>Does this use any paid backend / hidden costs?</b></summary>
 
-```
-Confidence Report
-  Final score:    0.84  ████████████████░░░░  (High)
-  Self-rating:    8/10
-  Root cause:     Missing null check in handleSubmit
-  Diff focus:     0.92
-  File relevance: 0.85
-  Hedge density:  1.2%
-  Tests run:      no
-  Files changed:  1  (12 lines)
-```
+No. FixFleet runs **100% locally** on your machine. No FixFleet servers, no Azure, no cloud component. You pay for nothing beyond AI plans you already own. The VSCode extension is free. The PyPI package is free. Updates forever, free.
 
-Sources: model self-rating from the structured `FIX REPORT` block, `git diff` metrics, hedge-word density, file-relevance vs candidate list.
+</details>
 
----
+<details>
+<summary><b>What's the difference between the VSCode extension and the CLI?</b></summary>
 
-## 💰 Token optimization
+Same engine, two interfaces:
+- **CLI** (`pip install fixfleet`) — interactive terminal flow, beautiful styled output
+- **VSCode extension** — premium UI sidebar + click-to-fix workflow, calls the CLI under the hood
 
-- **Locator** pre-greps the repo for candidate files → top file inlined directly into prompt
-- **Section caps** trim long descriptions/logs before sending
-- **Budget enforcement** — per-issue, session, daily caps in config
-- **State persistence** — skips already-fixed issues, tracks daily usage per backend
+Install both if you want flexibility. Extension auto-installs the CLI on first run if missing.
 
-Typical savings vs naive prompt: **60–80% tokens** for bugs with file/trace hints.
+</details>
 
----
+<details>
+<summary><b>Will it ever commit or push my changes?</b></summary>
 
-## ⚙️ Configuration
+Never. FixFleet edits files locally and leaves your working tree dirty. You review the diff (`git diff`), then commit + push manually. This is intentional — AI fixes need human review before shipping.
 
-Local config: `~/.bugfixer.json`
+</details>
 
-```json
-{
-  "default_backend": "claude",
-  "default_project_id": "group/project",
-  "default_project_host": "gitlab.com",
-  "default_project_dir": "/Users/you/work/project",
-  "api": {
-    "preset": "groq",
-    "base_url": "https://api.groq.com/openai/v1",
-    "api_key": "gsk_...",
-    "model": "llama-3.3-70b-versatile"
-  },
-  "budgets": {
-    "session_max_tokens": 200000,
-    "per_issue_max_tokens": 30000,
-    "daily_max_tokens": 500000
-  },
-  "skip_already_fixed": true
-}
-```
+<details>
+<summary><b>Does it work with self-hosted GitLab?</b></summary>
 
-> 🔒 Lives in your home directory, **NOT** the repo. The `.gitignore` excludes it from git regardless.
+Yes. Paste your full URL (e.g. `https://gitlab.mycompany.com/group/project`) and FixFleet auto-detects the host. No config needed.
 
-Override the backend per run with an env var:
-```bash
-BUGFIXER_BACKEND=codex python3 fix_bugs.py
-```
+</details>
+
+<details>
+<summary><b>Which AI should I use?</b></summary>
+
+- **Best quality** → Claude Code (Claude Pro)
+- **Fastest** → Groq (free Llama 3.3 70B)
+- **Biggest free quota** → Google Gemini API
+- **Fully offline** → Ollama with `qwen2.5-coder:7b`
+
+</details>
+
+<details>
+<summary><b>How is FixFleet different from Cursor / Cody / Copilot?</b></summary>
+
+Those are **autocomplete + chat** tools. FixFleet is a **bug-triage automator** — reads your bug tracker, dispatches each ticket to an AI, scores the fix. They complement each other.
+
+</details>
+
+<details>
+<summary><b>Is my code sent to FixFleet servers?</b></summary>
+
+There are no FixFleet servers. Your code goes from your machine → directly to whichever AI provider you pick (Anthropic / OpenAI / Google / Groq / Ollama / etc.) using your own credentials. FixFleet is open-source — read the code and verify.
+
+</details>
 
 ---
 
-## 🧪 Testing
+## 🛡️ Privacy & Security
 
-```bash
-python3 -m unittest tests.test_all -v
-```
-
-54+ unit tests cover parser, locator, budget, confidence, prompt, registry, diff-apply, state, config, URL parsing, path sanitization.
-
----
-
-## 📂 Project layout
-
-```
-fixfleet/
-├── bugfixer/
-│   ├── ui.py              terminal styling
-│   ├── gitlab.py          API client + URL parser
-│   ├── parser.py          issue-body section extractor
-│   ├── locator.py         signal extraction + file ranking + inlining
-│   ├── prompt.py          structured prompt builder
-│   ├── budget.py          token slimming + estimation + caps
-│   ├── confidence.py      diff metrics + self-rating + hedge density
-│   ├── state.py           ~/.bugfixer-state.json
-│   ├── config.py          ~/.bugfixer.json
-│   ├── cli.py             interactive flow orchestration
-│   └── backends/
-│       ├── base.py        Backend ABC
-│       ├── _subprocess.py tee runner
-│       ├── registry.py    detect installed CLIs + API presets
-│       ├── cli/           claude · codex · gemini · cursor · aider · qwen
-│       └── api/openai_compat.py
-├── fix_bugs.py            entry shim
-└── tests/test_all.py
-```
+- 🔒 Tokens typed via `getpass` — never echoed, never written to repo
+- 🛡️ Issue content fenced in prompts to prevent prompt-injection from malicious issue authors
+- 📂 Config + state stored in `~/.bugfixer.json` / `~/.bugfixer-state.json` (your home dir, never in any repo)
+- 🚫 Never commits, never pushes, never collects telemetry
 
 ---
 
-## 🛡️ Security notes
+## 📜 License
 
-- Tokens / API keys typed via `getpass` — never echoed to terminal, never written to repo.
-- All issue body content is **fenced** in the prompt with adaptive fence length to prevent prompt-injection from malicious issue authors.
-- The `.gitignore` excludes config + state files, common secret files (`.env`, `*.token`, `*.key`).
-- The tool **never** commits or pushes — manual review required before sharing fixes.
+**GPL-3.0-or-later** — see [LICENSE](LICENSE).
 
----
+This means anyone can use, study, modify, and redistribute FixFleet — but **derivative works must also be open-source under GPL-3**. No closed-source forks. No proprietary repackaging.
 
-## 🐞 Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| `claude command not found` | Install one CLI or pick the API option in Step 0 |
-| `HTTP 401` from GitLab | Token expired or wrong scope (`read_api`/`api` needed) |
-| `HTTP 404` | Wrong project URL/ID format |
-| "No bugs found" | GitLab issues need exact `Bug` label (case-sensitive) |
-| Path with spaces fails | Drag-drop folder from Finder works (auto-unescapes) |
-| Want to reset config | `rm ~/.bugfixer.json ~/.bugfixer-state.json` |
+Built by **[Yash Koladiya](https://github.com/Yash-Koladiya30)** • © 2026.
 
 ---
 
-## 🤝 Contributing
+<div align="center">
 
-Issues / PRs welcome. Guidelines:
+**If FixFleet saved you time, drop a ⭐ on the repo**.
 
-- Pure stdlib — no `requirements.txt` dependencies in core
-- All new code paths need unit tests
-- Run `python3 -m unittest tests.test_all` before submitting
+[Report a bug](https://github.com/Yash-Koladiya30/fixfleet/issues) · [Request feature](https://github.com/Yash-Koladiya30/fixfleet/issues) · [VSCode Extension](https://marketplace.visualstudio.com/items?itemName=YashKoladiya30.fixfleet) · [PyPI Package](https://pypi.org/project/fixfleet/)
 
----
-
-## 📄 License
-
-**GNU General Public License v3.0 or later (GPL-3.0-or-later)** — see [LICENSE](LICENSE).
-
-This means: anyone can use, study, modify, and redistribute FixFleet — but **derivative works must also be open-source under GPL-3**. No closed-source forks. No proprietary repackaging.
-
-Built by **Yash Koladiya**. © 2026.
+</div>
