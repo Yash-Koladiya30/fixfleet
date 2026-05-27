@@ -41,13 +41,52 @@ Built by **Yash Koladiya**.
 
 ## 🚀 Quick start
 
+### Install (pick one)
+
+**Option A — `pipx` (recommended, isolated)**
+```bash
+pipx install git+https://github.com/Yash-Koladiya30/fixfleet.git
+fixfleet
+```
+
+**Option B — `uv tool`**
+```bash
+uv tool install git+https://github.com/Yash-Koladiya30/fixfleet.git
+fixfleet
+```
+
+**Option C — one-shot run via `uvx` (no install)**
+```bash
+uvx --from git+https://github.com/Yash-Koladiya30/fixfleet.git fixfleet
+```
+
+**Option D — plain `pip`**
+```bash
+pip install git+https://github.com/Yash-Koladiya30/fixfleet.git
+fixfleet
+```
+
+**Option E — clone + run (for hacking on the code)**
 ```bash
 git clone https://github.com/Yash-Koladiya30/fixfleet.git
 cd fixfleet
 python3 fix_bugs.py
 ```
 
-No `pip install` required — pure stdlib. Works on Python 3.9+.
+Pure stdlib — **no runtime dependencies**. Works on Python 3.9+.
+
+### Upgrade
+
+```bash
+pipx upgrade fixfleet     # if installed with pipx
+uv tool upgrade fixfleet  # if installed with uv
+```
+
+### Uninstall
+
+```bash
+pipx uninstall fixfleet
+```
 
 ---
 
