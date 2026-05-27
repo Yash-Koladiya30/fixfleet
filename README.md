@@ -6,6 +6,7 @@
 
 *Reads open `Bug` issues from GitLab → parses stack traces and steps → pre-narrows the search to relevant files → dispatches to your AI agent of choice → scores the fix's confidence. All locally. No commits. No lock-in.*
 
+[![PyPI version](https://img.shields.io/pypi/v/fixfleet.svg)](https://pypi.org/project/fixfleet/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-54%20passing-brightgreen.svg)](#-testing)
@@ -43,7 +44,13 @@ Built by **Yash Koladiya**.
 
 ### Install (pick one)
 
-**Option A — `pipx` (recommended, isolated)**
+**Option A — `pipx` from PyPI (recommended)**
+```bash
+pipx install fixfleet
+fixfleet
+```
+
+**Option B — `pipx` from GitHub (latest dev)**
 ```bash
 pipx install git+https://github.com/Yash-Koladiya30/fixfleet.git
 fixfleet
