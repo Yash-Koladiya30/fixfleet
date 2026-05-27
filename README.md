@@ -42,58 +42,115 @@ Built by **Yash Koladiya**.
 
 ## 🚀 Quick start
 
-### Install (pick one)
+Pure stdlib — **no runtime dependencies**. Works on Python 3.9+.
 
-**Option A — `pipx` from PyPI (recommended)**
+### 🟢 Recommended — `pip install --user` (universal, no extra tools)
+
+```bash
+pip3 install --user fixfleet
+```
+
+Then **add `fixfleet` to PATH so the command works from any directory** (one-time setup):
+
+**zsh (default on macOS):**
+```bash
+echo 'export PATH="$(python3 -m site --user-base)/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**bash (Linux / older macOS):**
+```bash
+echo 'export PATH="$(python3 -m site --user-base)/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**fish:**
+```bash
+fish_add_path (python3 -m site --user-base)/bin
+```
+
+Then run:
+```bash
+fixfleet
+```
+
+> 💡 **Don't want to edit PATH?** Run directly via Python module — works anywhere, anytime:
+> ```bash
+> python3 -m bugfixer.cli
+> ```
+
+---
+
+### 🔵 Alternative — `pipx` (isolated, recommended if you use pipx already)
+
 ```bash
 pipx install fixfleet
 fixfleet
 ```
 
-**Option B — `pipx` from GitHub (latest dev)**
+> ⚠️ **Known issue:** If `pipx install` fails with `ensurepip` error on Python 3.14, run:
+> ```bash
+> rm -rf ~/.local/pipx/shared
+> pipx install --python python3.12 fixfleet
+> ```
+> Python 3.14 just released and Homebrew's `ensurepip` is broken in fresh installs. Falling back to 3.12 fixes it.
+
+---
+
+### 🟣 Other install methods
+
+**`uv tool`** — fastest, modern:
 ```bash
-pipx install git+https://github.com/Yash-Koladiya30/fixfleet.git
+uv tool install fixfleet
 fixfleet
 ```
 
-**Option B — `uv tool`**
+**One-shot run** (no install):
 ```bash
-uv tool install git+https://github.com/Yash-Koladiya30/fixfleet.git
-fixfleet
+uvx --from fixfleet fixfleet
 ```
 
-**Option C — one-shot run via `uvx` (no install)**
+**From GitHub** (latest dev, not PyPI):
 ```bash
-uvx --from git+https://github.com/Yash-Koladiya30/fixfleet.git fixfleet
+pip3 install --user git+https://github.com/Yash-Koladiya30/fixfleet.git
 ```
 
-**Option D — plain `pip`**
-```bash
-pip install git+https://github.com/Yash-Koladiya30/fixfleet.git
-fixfleet
-```
-
-**Option E — clone + run (for hacking on the code)**
+**Clone + run** (for hacking on the code):
 ```bash
 git clone https://github.com/Yash-Koladiya30/fixfleet.git
 cd fixfleet
 python3 fix_bugs.py
 ```
 
-Pure stdlib — **no runtime dependencies**. Works on Python 3.9+.
+---
 
-### Upgrade
-
-```bash
-pipx upgrade fixfleet     # if installed with pipx
-uv tool upgrade fixfleet  # if installed with uv
-```
-
-### Uninstall
+### 🔄 Upgrade
 
 ```bash
-pipx uninstall fixfleet
+pip3 install --user --upgrade fixfleet    # if installed with pip
+pipx upgrade fixfleet                     # if installed with pipx
+uv tool upgrade fixfleet                  # if installed with uv
 ```
+
+### 🗑️ Uninstall
+
+```bash
+pip3 uninstall fixfleet      # for pip install
+pipx uninstall fixfleet      # for pipx install
+uv tool uninstall fixfleet   # for uv install
+```
+
+---
+
+### ❓ Troubleshooting install
+
+| Symptom | Fix |
+|---|---|
+| `zsh: command not found: fixfleet` after `pip install --user` | PATH not set — see "add to PATH" step above, **or** just use `python3 -m bugfixer.cli` |
+| `pipx install` fails with `ensurepip` error | Python 3.14 bug — run `rm -rf ~/.local/pipx/shared && pipx install --python python3.12 fixfleet` |
+| `pip: command not found` | Use `pip3` instead of `pip` |
+| `python3: command not found` | Install Python 3.9+ — `brew install python3` (macOS) or `apt install python3` (Linux) |
+| Want to verify install path | `python3 -m site --user-base` shows where pip `--user` installs |
 
 ---
 
