@@ -7,7 +7,7 @@
 *Reads open `Bug` issues from GitLab → parses stack traces and steps → pre-narrows the search to relevant files → dispatches to your AI agent of choice → scores the fix's confidence. All locally. No commits. No lock-in.*
 
 [![PyPI version](https://img.shields.io/pypi/v/fixfleet.svg)](https://pypi.org/project/fixfleet/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-54%20passing-brightgreen.svg)](#-testing)
 [![Stdlib only](https://img.shields.io/badge/dependencies-stdlib%20only-success.svg)](#-quick-start)
@@ -360,4 +360,8 @@ Issues / PRs welcome. Guidelines:
 
 ## 📄 License
 
-MIT — see [LICENSE](LICENSE). Built by **Yash Koladiya**.
+**GNU General Public License v3.0 or later (GPL-3.0-or-later)** — see [LICENSE](LICENSE).
+
+This means: anyone can use, study, modify, and redistribute FixFleet — but **derivative works must also be open-source under GPL-3**. No closed-source forks. No proprietary repackaging.
+
+Built by **Yash Koladiya**. © 2026.

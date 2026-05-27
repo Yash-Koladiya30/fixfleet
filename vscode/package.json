@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "publisher": "yashkoladiya",
   "icon": "media/icon.png",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "engines": {
     "vscode": "^1.80.0"
   },
