@@ -1,0 +1,191 @@
+{
+  "name": "fixfleet",
+  "displayName": "FixFleet — AI GitLab Bug Fixer",
+  "description": "Auto-fix GitLab bugs with AI agents — Claude, Codex, Gemini, Cursor, Aider, Qwen, or any OpenAI-compatible API. Premium UI.",
+  "version": "0.1.0",
+  "publisher": "yashkoladiya",
+  "icon": "media/icon.png",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other",
+    "AI",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "gitlab",
+    "ai",
+    "bug-fixer",
+    "claude",
+    "codex",
+    "gemini",
+    "cursor",
+    "aider",
+    "agentic"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yash-Koladiya30/fixfleet-vscode"
+  },
+  "homepage": "https://github.com/Yash-Koladiya30/fixfleet-vscode",
+  "bugs": {
+    "url": "https://github.com/Yash-Koladiya30/fixfleet-vscode/issues"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onView:fixfleet.bugs",
+    "onCommand:fixfleet.refresh",
+    "onCommand:fixfleet.openSettings"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "fixfleet",
+          "title": "FixFleet",
+          "icon": "media/sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "fixfleet": [
+        {
+          "id": "fixfleet.bugs",
+          "name": "Open Bugs",
+          "icon": "media/sidebar-icon.svg",
+          "contextualTitle": "FixFleet — GitLab Bugs"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "fixfleet.bugs",
+        "contents": "🚀 **Welcome to FixFleet**\n\nAuto-fix GitLab bugs with any AI agent.\n\n[⚙️ Configure FixFleet](command:fixfleet.openSettings)\n\n[🔄 Refresh Bugs](command:fixfleet.refresh)\n\n_First time? Click Configure to set your GitLab token, project, and AI backend._"
+      }
+    ],
+    "commands": [
+      {
+        "command": "fixfleet.refresh",
+        "title": "Refresh Bugs",
+        "category": "FixFleet",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "fixfleet.openSettings",
+        "title": "Configure FixFleet",
+        "category": "FixFleet",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "fixfleet.openBug",
+        "title": "Open Bug Detail",
+        "category": "FixFleet"
+      },
+      {
+        "command": "fixfleet.fixBug",
+        "title": "Fix This Bug",
+        "category": "FixFleet",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "fixfleet.openInBrowser",
+        "title": "Open in GitLab",
+        "category": "FixFleet",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "fixfleet.checkInstall",
+        "title": "Check FixFleet CLI Install",
+        "category": "FixFleet"
+      },
+      {
+        "command": "fixfleet.installCli",
+        "title": "Install FixFleet CLI",
+        "category": "FixFleet"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "fixfleet.refresh",
+          "when": "view == fixfleet.bugs",
+          "group": "navigation@1"
+        },
+        {
+          "command": "fixfleet.openSettings",
+          "when": "view == fixfleet.bugs",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "fixfleet.fixBug",
+          "when": "view == fixfleet.bugs && viewItem == bug",
+          "group": "inline@1"
+        },
+        {
+          "command": "fixfleet.openInBrowser",
+          "when": "view == fixfleet.bugs && viewItem == bug",
+          "group": "inline@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "FixFleet",
+      "properties": {
+        "fixfleet.cliPath": {
+          "type": "string",
+          "default": "fixfleet",
+          "description": "Path to the `fixfleet` CLI binary (default: from PATH)."
+        },
+        "fixfleet.pythonPath": {
+          "type": "string",
+          "default": "python3",
+          "description": "Path to Python interpreter (fallback if CLI binary not on PATH)."
+        },
+        "fixfleet.gitlabToken": {
+          "type": "string",
+          "default": "",
+          "description": "GitLab Personal Access Token (scope: api or read_api). Stored in user settings.",
+          "scope": "application"
+        },
+        "fixfleet.projectUrl": {
+          "type": "string",
+          "default": "",
+          "description": "GitLab project URL (e.g. https://gitlab.com/group/project)."
+        },
+        "fixfleet.projectDir": {
+          "type": "string",
+          "default": "",
+          "description": "Local project directory (where AI agent will edit files). Defaults to workspace root."
+        },
+        "fixfleet.backend": {
+          "type": "string",
+          "enum": ["claude", "codex", "gemini", "cursor", "aider", "qwen", "openai_compat"],
+          "default": "claude",
+          "description": "Which AI backend to use for fixing bugs."
+        },
+        "fixfleet.dateFilter": {
+          "type": "string",
+          "default": "",
+          "description": "Optional YYYY-MM-DD date filter for bug fetch."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.4.0",
+    "@vscode/vsce": "^2.24.0"
+  }
+}
