@@ -12,7 +12,7 @@ No commits or pushes — you review and commit yourself.
 Built by Yash Koladiya.
 """
 
-from bugfixer.cli import main
+from bugfixer.json_api import main
 
 if __name__ == "__main__":
     main()

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fixfleet"
-version = "0.3.0"
+version = "0.4.0"
 description = "Auto-fix GitLab bugs with AI agents — bring your own CLI or free API."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -42,8 +42,8 @@ Repository = "https://github.com/Yash-Koladiya30/fixfleet"
 Issues = "https://github.com/Yash-Koladiya30/fixfleet/issues"
 
 [project.scripts]
-fixfleet = "bugfixer.cli:main"
-fix-bugs = "bugfixer.cli:main"
+fixfleet = "bugfixer.json_api:main"
+fix-bugs = "bugfixer.json_api:main"
 
 [tool.setuptools]
 packages = [
