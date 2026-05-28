@@ -4,10 +4,19 @@
  * Color palette derived from extension icon: forest green + cream + walnut + sage.
  */
 import * as vscode from 'vscode';
-import { BugIssue, listBugs } from './fixfleetCli';
+import { BugIssue, FixFleetError, listBugs } from './fixfleetCli';
 import { BugPanel } from './bugPanel';
 
-type ViewState = 'not-configured' | 'loading' | 'empty' | 'has-bugs' | 'error';
+type ViewState =
+    | 'not-configured'
+    | 'loading'
+    | 'empty'
+    | 'has-bugs'
+    | 'error-auth'
+    | 'error-notfound'
+    | 'error-network'
+    | 'error-cli-missing'
+    | 'error-generic';
 
 export class FixFleetWebView implements vscode.WebviewViewProvider {
     public static readonly viewType = 'fixfleet.bugs';
@@ -55,6 +64,11 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
             case 'install':
                 vscode.commands.executeCommand('fixfleet.installCli');
                 break;
+            case 'openTokenPage':
+                vscode.env.openExternal(
+                    vscode.Uri.parse('https://gitlab.com/-/user_settings/personal_access_tokens'),
+                );
+                break;
             case 'ready':
                 this.refresh();
                 break;
@@ -84,9 +98,18 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
             this.currentState = this.bugs.length > 0 ? 'has-bugs' : 'empty';
             this.errorMsg = '';
         } catch (e) {
-            this.currentState = 'error';
-            this.errorMsg = (e as Error).message || 'Unknown error';
             this.bugs = [];
+            if (e instanceof FixFleetError) {
+                this.errorMsg = e.message;
+                if (e.isAuthError) this.currentState = 'error-auth';
+                else if (e.isNotFoundError) this.currentState = 'error-notfound';
+                else if (e.isNetworkError) this.currentState = 'error-network';
+                else if (e.isCliMissing) this.currentState = 'error-cli-missing';
+                else this.currentState = 'error-generic';
+            } else {
+                this.errorMsg = (e as Error).message || 'Unknown error';
+                this.currentState = 'error-generic';
+            }
         }
         this.render();
     }
@@ -140,8 +163,16 @@ window.addEventListener('DOMContentLoaded', () => { send('ready'); });
                 return header + this.renderEmpty();
             case 'has-bugs':
                 return header + this.renderBugs();
-            case 'error':
-                return header + this.renderError();
+            case 'error-auth':
+                return header + this.renderErrorAuth();
+            case 'error-notfound':
+                return header + this.renderErrorNotFound();
+            case 'error-network':
+                return header + this.renderErrorNetwork();
+            case 'error-cli-missing':
+                return header + this.renderErrorCliMissing();
+            case 'error-generic':
+                return header + this.renderErrorGeneric();
         }
     }
 
@@ -205,15 +236,74 @@ window.addEventListener('DOMContentLoaded', () => { send('ready'); });
         `;
     }
 
-    private renderError(): string {
+    private renderErrorAuth(): string {
+        return `
+            <div class="state-card error-card">
+                <div class="big-emoji">🔐</div>
+                <div class="state-title">GitLab token rejected</div>
+                <div class="error-msg">${this.escape(this.errorMsg)}</div>
+                <div class="muted">Your token is invalid, expired, or lacks the required scope.</div>
+                <button class="btn btn-primary btn-block" onclick="send('openTokenPage')">
+                    🔑 &nbsp;Generate New Token
+                </button>
+                <button class="btn btn-secondary btn-block" onclick="send('configure')">
+                    ⚙ &nbsp;Update Token in Settings
+                </button>
+                <button class="btn btn-ghost" onclick="send('refresh')">Retry</button>
+            </div>
+        `;
+    }
+
+    private renderErrorNotFound(): string {
+        return `
+            <div class="state-card error-card">
+                <div class="big-emoji">📭</div>
+                <div class="state-title">Project not found</div>
+                <div class="error-msg">${this.escape(this.errorMsg)}</div>
+                <div class="muted">URL may be wrong, or your token doesn't have access to this project.</div>
+                <button class="btn btn-primary btn-block" onclick="send('configure')">
+                    ⚙ &nbsp;Fix Project URL
+                </button>
+                <button class="btn btn-ghost" onclick="send('refresh')">Retry</button>
+            </div>
+        `;
+    }
+
+    private renderErrorNetwork(): string {
+        return `
+            <div class="state-card error-card">
+                <div class="big-emoji">🌐</div>
+                <div class="state-title">Can't reach GitLab</div>
+                <div class="error-msg">${this.escape(this.errorMsg)}</div>
+                <div class="muted">Check your internet connection. If using self-hosted GitLab, verify the host is reachable.</div>
+                <button class="btn btn-primary btn-block" onclick="send('refresh')">Try again</button>
+                <button class="btn btn-ghost" onclick="send('configure')">Open Settings</button>
+            </div>
+        `;
+    }
+
+    private renderErrorCliMissing(): string {
+        return `
+            <div class="state-card error-card">
+                <div class="big-emoji">📦</div>
+                <div class="state-title">FixFleet CLI not installed</div>
+                <div class="muted">The VSCode extension needs the FixFleet Python CLI installed on your machine.</div>
+                <button class="btn btn-primary btn-block" onclick="send('install')">
+                    📥 &nbsp;Install FixFleet CLI
+                </button>
+                <button class="btn btn-ghost" onclick="send('refresh')">Already installed? Retry</button>
+            </div>
+        `;
+    }
+
+    private renderErrorGeneric(): string {
         return `
             <div class="state-card error-card">
                 <div class="big-emoji">⚠</div>
                 <div class="state-title">Couldn't fetch bugs</div>
-                <div class="muted">${this.escape(this.errorMsg).slice(0, 200)}</div>
-                <button class="btn btn-secondary" onclick="send('refresh')">Try again</button>
+                <div class="error-msg">${this.escape(this.errorMsg).slice(0, 300)}</div>
+                <button class="btn btn-secondary btn-block" onclick="send('refresh')">Try again</button>
                 <button class="btn btn-ghost" onclick="send('configure')">Open Settings</button>
-                <button class="btn btn-ghost" onclick="send('install')">Install CLI</button>
             </div>
         `;
     }
@@ -514,7 +604,20 @@ const STYLES = `
         border-radius: var(--ff-radius);
     }
     .state-card .btn { margin: 8px 4px 0; }
+    .state-card .btn-block { margin: 12px 0 0; }
     .error-card { border-color: rgba(177, 79, 88, 0.3); background: rgba(177, 79, 88, 0.05); }
+    .error-msg {
+        font-size: 12px;
+        color: #E8A8B0;
+        margin: 6px 0 10px;
+        padding: 8px 12px;
+        background: rgba(177, 79, 88, 0.12);
+        border-left: 2px solid var(--ff-burgundy);
+        border-radius: 4px;
+        text-align: left;
+        line-height: 1.45;
+        font-style: normal;
+    }
 
     .big-emoji { font-size: 32px; margin-bottom: 8px; }
 

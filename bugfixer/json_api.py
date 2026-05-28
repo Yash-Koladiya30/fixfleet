@@ -21,7 +21,14 @@ from .backends.registry import (
     list_cli_backends,
 )
 from .confidence import evaluate as evaluate_confidence
-from .gitlab import fetch_bug_issues, parse_project_input
+from .gitlab import (
+    GitLabAuthError,
+    GitLabError,
+    GitLabNetworkError,
+    GitLabNotFoundError,
+    fetch_bug_issues,
+    parse_project_input,
+)
 from .locator import locate
 from .parser import parse_issue
 from .prompt import build_prompt
@@ -34,9 +41,20 @@ def _emit(payload):
     sys.stdout.flush()
 
 
-def _err(message: str, code: int = 1):
-    _emit({"ok": False, "error": message})
+def _err(message: str, code: int = 1, error_code: str = "generic"):
+    _emit({"ok": False, "error": message, "code": error_code})
     sys.exit(code)
+
+
+def _err_from_gitlab(e: GitLabError):
+    """Emit structured JSON for a GitLab exception, then exit cleanly."""
+    _emit({
+        "ok": False,
+        "code": e.code,
+        "status": e.status,
+        "error": e.message,
+    })
+    sys.exit(1)
 
 
 # ── List backends ──────────────────────────────────────────────
@@ -90,9 +108,10 @@ def cmd_list_bugs_json(args):
 
     try:
         issues = fetch_bug_issues(token, project_id, date_str=args.date, host=host)
-    except SystemExit:
-        # gitlab.fetch_bug_issues exits on errors; re-raise as JSON
-        _err("fetch failed — token, scope, or project URL invalid")
+    except GitLabError as e:
+        _err_from_gitlab(e)
+    except Exception as e:
+        _err(f"unexpected error: {e}", error_code="unexpected")
 
     payload_issues = []
     for i in issues:
@@ -174,7 +193,10 @@ def cmd_fix_issue(args):
         _err(f"unknown backend: {backend_name}")
 
     # Fetch + find target issue
-    issues = fetch_bug_issues(token, project_id, host=host)
+    try:
+        issues = fetch_bug_issues(token, project_id, host=host)
+    except GitLabError as e:
+        _err_from_gitlab(e)
     target = next((i for i in issues if i.get("iid") == issue_iid), None)
     if target is None:
         _err(f"issue #{issue_iid} not found among open Bug-labeled issues")

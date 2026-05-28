@@ -15,7 +15,13 @@ from .backends.registry import (
     list_cli_backends,
 )
 from .confidence import evaluate as evaluate_confidence
-from .gitlab import fetch_bug_issues
+from .gitlab import (
+    GitLabAuthError,
+    GitLabError,
+    GitLabNetworkError,
+    GitLabNotFoundError,
+    fetch_bug_issues,
+)
 from .locator import locate
 from .parser import parse_issue
 from .prompt import build_prompt
@@ -627,7 +633,26 @@ def main():
 
     ui.print_section("Step 5 — Fetching Issues from GitLab")
     ui.print_info(f"Connecting to {ui.DIM}{host}{ui.RESET}...")
-    issues = fetch_bug_issues(token, project_id, date_filter, host=host)
+    try:
+        issues = fetch_bug_issues(token, project_id, date_filter, host=host)
+    except GitLabAuthError as e:
+        ui.print_error(e.message)
+        ui.print_info("Open https://gitlab.com/-/user_settings/personal_access_tokens to create a new token.")
+        ui.print_end()
+        sys.exit(1)
+    except GitLabNotFoundError as e:
+        ui.print_error(e.message)
+        ui.print_end()
+        sys.exit(1)
+    except GitLabNetworkError as e:
+        ui.print_error(e.message)
+        ui.print_info("Check your internet connection and try again.")
+        ui.print_end()
+        sys.exit(1)
+    except GitLabError as e:
+        ui.print_error(e.message)
+        ui.print_end()
+        sys.exit(1)
     if not issues:
         ui.print_warning("No open bug issues found! Nothing to fix.")
         ui.print_end()

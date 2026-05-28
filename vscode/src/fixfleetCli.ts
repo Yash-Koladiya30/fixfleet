@@ -50,6 +50,8 @@ export interface ConfidenceReport {
 export interface FixResult {
     ok: boolean;
     error?: string;
+    code?: string;
+    status?: number;
     issue?: { iid: number; title: string };
     backend?: string;
     result?: { returncode: number; timed_out: boolean; stdout: string; stderr: string };
@@ -57,6 +59,38 @@ export interface FixResult {
     tokens?: { estimated: number; daily_used_after: number };
     locator?: { files_mentioned: string[]; candidates: string[]; frames_count: number; symbols_count: number };
     success?: boolean;
+}
+
+/** Structured error from the fixfleet CLI's JSON API. */
+export class FixFleetError extends Error {
+    constructor(
+        public readonly code: string,
+        public readonly status: number,
+        message: string,
+    ) {
+        super(message);
+        this.name = 'FixFleetError';
+    }
+
+    /** True if the user needs to update their GitLab token. */
+    get isAuthError(): boolean {
+        return this.code === 'token_invalid' || this.code === 'token_forbidden';
+    }
+
+    /** True if the project URL is wrong or token has no access. */
+    get isNotFoundError(): boolean {
+        return this.code === 'project_not_found';
+    }
+
+    /** True if network/DNS/timeout. */
+    get isNetworkError(): boolean {
+        return this.code === 'network_error';
+    }
+
+    /** True if FixFleet CLI is missing entirely (binary not found). */
+    get isCliMissing(): boolean {
+        return this.code === 'cli_missing';
+    }
 }
 
 function cliCommand(): string {
@@ -71,18 +105,25 @@ function pythonCommand(): string {
 
 /**
  * Run fixfleet with JSON args. Try direct binary first, then `python -m bugfixer.json_api`.
+ * Strips ANSI noise from stdout, returns last JSON line.
  */
 async function runJson(args: string[], timeoutMs = 120_000): Promise<any> {
     const tryRun = (cmd: string, fullArgs: string[]) =>
         new Promise<any>((resolve, reject) => {
-            const child = cp.spawn(cmd, fullArgs, {
-                env: { ...process.env, NO_COLOR: '1' },
-            });
+            let child: cp.ChildProcessWithoutNullStreams;
+            try {
+                child = cp.spawn(cmd, fullArgs, {
+                    env: { ...process.env, NO_COLOR: '1', PYTHONUNBUFFERED: '1' },
+                });
+            } catch (err) {
+                reject(err);
+                return;
+            }
             let stdout = '';
             let stderr = '';
             const timer = setTimeout(() => {
                 child.kill('SIGTERM');
-                reject(new Error(`fixfleet timeout after ${timeoutMs}ms`));
+                reject(new FixFleetError('timeout', 0, `FixFleet CLI timed out after ${Math.round(timeoutMs / 1000)}s.`));
             }, timeoutMs);
 
             child.stdout.on('data', d => (stdout += d.toString()));
@@ -94,39 +135,70 @@ async function runJson(args: string[], timeoutMs = 120_000): Promise<any> {
             });
             child.on('close', code => {
                 clearTimeout(timer);
-                if (code !== 0 && !stdout.trim()) {
-                    reject(new Error(`fixfleet exited ${code}: ${stderr.trim() || 'no output'}`));
+                const lastJsonLine = stdout
+                    .trim()
+                    .split('\n')
+                    .map(l => l.trim())
+                    .filter(l => l.startsWith('{'))
+                    .pop();
+
+                if (lastJsonLine) {
+                    try {
+                        const parsed = JSON.parse(lastJsonLine);
+                        resolve(parsed);
+                        return;
+                    } catch {
+                        // fall through
+                    }
+                }
+
+                if (code !== 0) {
+                    reject(new FixFleetError('cli_error', 0, `FixFleet CLI exited with code ${code}. ${stderr.trim() || ''}`.trim()));
                     return;
                 }
-                try {
-                    const lastLine = stdout
-                        .trim()
-                        .split('\n')
-                        .filter(l => l.trim().startsWith('{'))
-                        .pop();
-                    if (!lastLine) {
-                        reject(new Error(`no JSON in output: ${stdout.slice(0, 500)}`));
-                        return;
-                    }
-                    resolve(JSON.parse(lastLine));
-                } catch (e) {
-                    reject(new Error(`bad JSON from fixfleet: ${(e as Error).message}`));
-                }
+                reject(new FixFleetError('bad_output', 0, `Couldn't parse output from FixFleet CLI.`));
             });
         });
 
     try {
         return await tryRun(cliCommand(), args);
     } catch (e) {
-        // Fallback: python3 -m bugfixer.json_api
-        return tryRun(pythonCommand(), ['-m', 'bugfixer.json_api', ...args]);
+        // ENOENT means binary not found — try the python module fallback.
+        const code = (e as any)?.code;
+        if (code === 'ENOENT' || code === 'EACCES') {
+            try {
+                return await tryRun(pythonCommand(), ['-m', 'bugfixer.json_api', ...args]);
+            } catch (pyErr) {
+                const pyCode = (pyErr as any)?.code;
+                if (pyCode === 'ENOENT') {
+                    throw new FixFleetError(
+                        'cli_missing',
+                        0,
+                        "FixFleet CLI not installed. Run: pip3 install --user fixfleet",
+                    );
+                }
+                throw pyErr;
+            }
+        }
+        throw e;
     }
 }
 
-export async function checkCliInstalled(): Promise<{ installed: boolean; version?: string; method?: string }> {
+/** Unwrap a JSON API response, throwing a FixFleetError on `ok: false`. */
+function unwrap<T>(res: any): T {
+    if (!res || res.ok === false) {
+        const code = res?.code || 'generic';
+        const status = res?.status || 0;
+        const msg = res?.error || 'Unknown error from FixFleet CLI.';
+        throw new FixFleetError(code, status, msg);
+    }
+    return res as T;
+}
+
+export async function checkCliInstalled(): Promise<{ installed: boolean; version?: string }> {
     try {
         const result = await runJson(['--backends-json'], 10_000);
-        return { installed: true, version: result.version, method: 'cli' };
+        return { installed: true, version: result.version };
     } catch {
         return { installed: false };
     }
@@ -134,10 +206,7 @@ export async function checkCliInstalled(): Promise<{ installed: boolean; version
 
 export async function listBackends(): Promise<{ cli_backends: BackendInfo[]; api_presets: any[] }> {
     const res = await runJson(['--backends-json']);
-    if (!res.ok) {
-        throw new Error(res.error || 'failed to list backends');
-    }
-    return res;
+    return unwrap(res);
 }
 
 export async function listBugs(opts: {
@@ -148,11 +217,8 @@ export async function listBugs(opts: {
     const args = ['--list-bugs-json', '--token', opts.token, '--project-url', opts.projectUrl];
     if (opts.date) args.push('--date', opts.date);
 
-    const res = await runJson(args, 60_000);
-    if (!res.ok) {
-        throw new Error(res.error || 'failed to list bugs');
-    }
-    return res;
+    const res = await runJson(args, 45_000);
+    return unwrap(res);
 }
 
 export async function fixBug(opts: {

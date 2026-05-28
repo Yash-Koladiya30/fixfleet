@@ -27,6 +27,34 @@ PER_PAGE = 100
 MAX_PAGES = 20  # hard cap to avoid runaway loops
 
 
+# ── Structured errors ──────────────────────────────────────────
+
+class GitLabError(Exception):
+    """Base for all GitLab API errors. Carries a structured `code` so callers
+    (interactive CLI, JSON API, VSCode extension) can render a tailored message."""
+
+    def __init__(self, code: str, message: str, status: int = 0):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status = status
+
+    def to_dict(self) -> dict:
+        return {"code": self.code, "message": self.message, "status": self.status}
+
+
+class GitLabAuthError(GitLabError):
+    """401 / 403 — token invalid, expired, or lacks scope."""
+
+
+class GitLabNotFoundError(GitLabError):
+    """404 — project missing or token has no access."""
+
+
+class GitLabNetworkError(GitLabError):
+    """Couldn't reach the GitLab host (DNS, connection refused, timeout)."""
+
+
 # ── URL parsing ────────────────────────────────────────────────
 
 _SSH_RE = re.compile(r"^(?:ssh://)?(?:git@)?([^:/]+)[:/](.+?)(?:\.git)?/?$")
@@ -128,18 +156,34 @@ def fetch_bug_issues(token: str, project_id: str, date_str: str = None,
                 batch = json.loads(resp.read().decode())
                 next_page = resp.headers.get("X-Next-Page", "").strip()
         except urllib.error.HTTPError as e:
-            ui.print_error(f"GitLab API error: {e.code} {e.reason}")
             if e.code == 401:
-                ui.print_info("Token invalid or expired. Create a new one.")
-            elif e.code == 403:
-                ui.print_info("Token lacks required scope. Need 'api' or 'read_api'.")
-            elif e.code == 404:
-                ui.print_info(f"Project not found at https://{host}/{project_id}")
-                ui.print_info("Check that the URL is correct and your token has access.")
-            sys.exit(1)
+                raise GitLabAuthError(
+                    code="token_invalid",
+                    status=401,
+                    message="GitLab token is invalid or expired. Generate a new one with scope `api` or `read_api`.",
+                )
+            if e.code == 403:
+                raise GitLabAuthError(
+                    code="token_forbidden",
+                    status=403,
+                    message="GitLab token lacks required scope. Need `api` or `read_api`.",
+                )
+            if e.code == 404:
+                raise GitLabNotFoundError(
+                    code="project_not_found",
+                    status=404,
+                    message=f"Project not found at https://{host}/{project_id}. Check the URL and that your token has access.",
+                )
+            raise GitLabError(
+                code=f"http_{e.code}",
+                status=e.code,
+                message=f"GitLab API returned {e.code} {e.reason}",
+            )
         except urllib.error.URLError as e:
-            ui.print_error(f"Network error: {e.reason}")
-            sys.exit(1)
+            raise GitLabNetworkError(
+                code="network_error",
+                message=f"Couldn't reach https://{host} — {e.reason}",
+            )
 
         if not batch:
             break
