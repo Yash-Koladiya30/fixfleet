@@ -285,9 +285,13 @@ export async function listBugs(opts: {
     token: string;
     projectUrl: string;
     date?: string;
+    dateFrom?: string;
+    dateTo?: string;
 }): Promise<{ host: string; project_id: string; issues: BugIssue[] }> {
     const args = ['--list-bugs-json', '--token', opts.token, '--project-url', opts.projectUrl];
-    if (opts.date) args.push('--date', opts.date);
+    if (opts.dateFrom) args.push('--date-from', opts.dateFrom);
+    if (opts.dateTo) args.push('--date-to', opts.dateTo);
+    if (opts.date && !opts.dateFrom && !opts.dateTo) args.push('--date', opts.date);
 
     const res = await runJson(args, 20_000);
     return unwrap(res);

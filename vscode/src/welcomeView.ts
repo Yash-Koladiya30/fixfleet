@@ -4,7 +4,7 @@
  * Color palette derived from extension icon: forest green + cream + walnut + sage.
  */
 import * as vscode from 'vscode';
-import { BugIssue, FixFleetError, listBugs } from './fixfleetCli';
+import { BugIssue, FixFleetError, fixBug, listBugs } from './fixfleetCli';
 import { BugPanel } from './bugPanel';
 
 type ViewState =
@@ -25,6 +25,18 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
     private bugs: BugIssue[] = [];
     private currentState: ViewState = 'loading';
     private errorMsg = '';
+
+    /** IIDs of bugs the user has ticked. */
+    private selected: Set<number> = new Set();
+
+    /** Queue progress when batch-fixing. */
+    private queueState: {
+        active: boolean;
+        total: number;
+        done: number;
+        currentIid: number | null;
+        results: { iid: number; success: boolean; label: string }[];
+    } = { active: false, total: 0, done: 0, currentIid: null, results: [] };
 
     constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -69,21 +81,139 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
                     vscode.Uri.parse('https://gitlab.com/-/user_settings/personal_access_tokens'),
                 );
                 break;
-            case 'ready':
+            case 'toggleSelect':
+                if (this.selected.has(msg.iid)) this.selected.delete(msg.iid);
+                else this.selected.add(msg.iid);
+                this.render();
+                break;
+            case 'selectAll':
+                this.selected = new Set(this.bugs.filter(b => !b.already_fixed).map(b => b.iid));
+                this.render();
+                break;
+            case 'clearSelection':
+                this.selected.clear();
+                this.render();
+                break;
+            case 'fixSelected':
+                await this.batchFix();
+                break;
+            case 'setDateRange':
+                await vscode.workspace.getConfiguration('fixfleet').update(
+                    'dateFrom', msg.dateFrom || '', vscode.ConfigurationTarget.Global,
+                );
+                await vscode.workspace.getConfiguration('fixfleet').update(
+                    'dateTo', msg.dateTo || '', vscode.ConfigurationTarget.Global,
+                );
                 this.refresh();
                 break;
+            case 'clearDateRange':
+                await vscode.workspace.getConfiguration('fixfleet').update(
+                    'dateFrom', '', vscode.ConfigurationTarget.Global,
+                );
+                await vscode.workspace.getConfiguration('fixfleet').update(
+                    'dateTo', '', vscode.ConfigurationTarget.Global,
+                );
+                this.refresh();
+                break;
+            // NOTE: removed 'ready' auto-refresh — caused infinite render loop.
         }
     }
 
-    private refreshSeq = 0;
+    /** Sequentially fix all selected bugs. */
+    private async batchFix() {
+        const cfg = vscode.workspace.getConfiguration('fixfleet');
+        const token = cfg.get<string>('gitlabToken') || '';
+        const projectUrl = cfg.get<string>('projectUrl') || '';
+        const backend = cfg.get<string>('backend') || 'claude';
+        let projectDir = cfg.get<string>('projectDir') || '';
+        if (!projectDir) {
+            projectDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+        }
+        if (!token || !projectUrl || !projectDir) {
+            vscode.window.showErrorMessage(
+                'FixFleet: configure token, project URL, and project dir first.',
+            );
+            return;
+        }
+
+        const iids = Array.from(this.selected);
+        if (!iids.length) return;
+
+        this.queueState = {
+            active: true,
+            total: iids.length,
+            done: 0,
+            currentIid: null,
+            results: [],
+        };
+        this.render();
+
+        for (const iid of iids) {
+            this.queueState.currentIid = iid;
+            this.render();
+            try {
+                const res = await fixBug({
+                    issueIid: iid,
+                    backend,
+                    token,
+                    projectUrl,
+                    projectDir,
+                });
+                const label = res.confidence?.label || (res.success ? 'Done' : 'Failed');
+                this.queueState.results.push({
+                    iid, success: Boolean(res.success), label,
+                });
+            } catch (e) {
+                this.queueState.results.push({
+                    iid, success: false,
+                    label: (e as Error).message.slice(0, 40),
+                });
+            }
+            this.queueState.done++;
+            this.render();
+        }
+
+        this.queueState.active = false;
+        this.queueState.currentIid = null;
+        this.selected.clear();
+        vscode.window.showInformationMessage(
+            `FixFleet batch complete: ${this.queueState.results.filter(r => r.success).length}/${this.queueState.total} succeeded`,
+        );
+        // Refresh bug list so 'already_fixed' updates
+        this.refresh();
+    }
+
+    private isRefreshing = false;
+    private pendingRefresh = false;
 
     public async refresh() {
         if (!this.view) return;
 
+        // Coalesce: if a refresh is already running, just queue one more.
+        if (this.isRefreshing) {
+            this.pendingRefresh = true;
+            return;
+        }
+        this.isRefreshing = true;
+
+        try {
+            await this._doRefresh();
+        } finally {
+            this.isRefreshing = false;
+            if (this.pendingRefresh) {
+                this.pendingRefresh = false;
+                setTimeout(() => this.refresh(), 100);
+            }
+        }
+    }
+
+    private async _doRefresh() {
         const cfg = vscode.workspace.getConfiguration('fixfleet');
         const token = cfg.get<string>('gitlabToken') || '';
         const projectUrl = cfg.get<string>('projectUrl') || '';
         const date = cfg.get<string>('dateFilter') || '';
+        const dateFrom = cfg.get<string>('dateFrom') || '';
+        const dateTo = cfg.get<string>('dateTo') || '';
 
         if (!token || !projectUrl) {
             this.currentState = 'not-configured';
@@ -91,13 +221,14 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
             return;
         }
 
-        const mySeq = ++this.refreshSeq;
         this.currentState = 'loading';
         this.render();
 
-        // Hard watchdog: if listBugs hasn't resolved in 50s, force-error.
+        // Hard watchdog: if listBugs hasn't resolved in 25s, force-error.
+        let resolved = false;
         const watchdog = setTimeout(() => {
-            if (this.refreshSeq !== mySeq) return;
+            if (resolved) return;
+            resolved = true;
             this.currentState = 'error-generic';
             this.errorMsg =
                 'Request took too long. Check the FixFleet CLI is installed and your network can reach GitLab.';
@@ -105,13 +236,20 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
         }, 25_000);
 
         try {
-            const result = await listBugs({ token, projectUrl, date: date || undefined });
-            if (this.refreshSeq !== mySeq) return; // stale
+            const result = await listBugs({
+                token, projectUrl,
+                date: date || undefined,
+                dateFrom: dateFrom || undefined,
+                dateTo: dateTo || undefined,
+            });
+            if (resolved) return; // watchdog already fired
+            resolved = true;
             this.bugs = result.issues || [];
             this.currentState = this.bugs.length > 0 ? 'has-bugs' : 'empty';
             this.errorMsg = '';
         } catch (e) {
-            if (this.refreshSeq !== mySeq) return; // stale
+            if (resolved) return;
+            resolved = true;
             this.bugs = [];
             if (e instanceof FixFleetError) {
                 this.errorMsg = e.message;
@@ -154,7 +292,6 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
 <script>
 const vscode = acquireVsCodeApi();
 function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
-window.addEventListener('DOMContentLoaded', () => { send('ready'); });
 </script>
 </body>
 </html>`;
@@ -342,6 +479,10 @@ window.addEventListener('DOMContentLoaded', () => { send('ready'); });
             total: this.bugs.length,
         };
 
+        const cfg = vscode.workspace.getConfiguration('fixfleet');
+        const dateFrom = cfg.get<string>('dateFrom') || '';
+        const dateTo = cfg.get<string>('dateTo') || '';
+
         const summary = `
             <div class="summary">
                 <div class="summary-pill total">${counts.total} <span class="pill-label">open</span></div>
@@ -355,20 +496,81 @@ window.addEventListener('DOMContentLoaded', () => { send('ready'); });
             </div>
         `;
 
+        // Date range filter row
+        const dateRange = `
+            <div class="date-range">
+                <div class="date-field">
+                    <label>From</label>
+                    <input type="date" id="dateFrom" value="${this.escape(dateFrom)}" />
+                </div>
+                <div class="date-field">
+                    <label>To</label>
+                    <input type="date" id="dateTo" value="${this.escape(dateTo)}" />
+                </div>
+                <button class="date-btn" id="applyDate" title="Apply date filter">Apply</button>
+                ${(dateFrom || dateTo) ? `<button class="date-btn date-btn-ghost" id="clearDate" title="Clear filter">Clear</button>` : ''}
+            </div>
+        `;
+
+        // Multi-select bar
+        const fixableCount = this.bugs.filter(b => !b.already_fixed).length;
+        const selCount = this.selected.size;
+        const selectAllChecked = selCount > 0 && selCount === fixableCount;
+        const selectBar = this.queueState.active ? this.renderQueueBar() : `
+            <div class="select-bar">
+                <label class="select-all">
+                    <input type="checkbox" id="selectAll" ${selectAllChecked ? 'checked' : ''} />
+                    <span>Select all</span>
+                </label>
+                <div class="select-actions">
+                    <button class="fix-btn" id="fixSelected" ${selCount === 0 ? 'disabled' : ''}>
+                        ✨ Fix Selected (${selCount})
+                    </button>
+                    ${selCount > 0 ? `<button class="select-clear" id="clearSel">Clear</button>` : ''}
+                </div>
+            </div>
+        `;
+
         const list = sorted
             .map(b => {
                 const priority = b.labels.find(l => l in priorityRank) || '';
                 const pCls = priority.toLowerCase();
                 const fixed = b.already_fixed ? `<span class="badge-fixed">FIXED</span>` : '';
                 const date = (b.created_at || '').slice(0, 10);
+                const isChecked = this.selected.has(b.iid);
+                const queueResult = this.queueState.results.find(r => r.iid === b.iid);
+                const isCurrent = this.queueState.currentIid === b.iid;
+                const cardCls = [
+                    'bug-card',
+                    b.already_fixed ? 'is-fixed' : '',
+                    isChecked ? 'is-selected' : '',
+                    isCurrent ? 'is-current' : '',
+                    queueResult ? (queueResult.success ? 'is-done' : 'is-failed') : '',
+                ].filter(Boolean).join(' ');
+                const checkbox = b.already_fixed ? '' : `
+                    <input type="checkbox"
+                        class="bug-check"
+                        data-iid="${b.iid}"
+                        ${isChecked ? 'checked' : ''}
+                        ${this.queueState.active ? 'disabled' : ''}
+                    />
+                `;
+                const statusBadge = isCurrent
+                    ? '<span class="badge-current">⟳ FIXING</span>'
+                    : queueResult
+                        ? (queueResult.success
+                            ? `<span class="badge-success">✓ ${this.escape(queueResult.label)}</span>`
+                            : `<span class="badge-fail">✗ ${this.escape(queueResult.label)}</span>`)
+                        : '';
                 return `
-                    <div class="bug-card ${b.already_fixed ? 'is-fixed' : ''}" onclick="send('openBug', {iid: ${b.iid}})">
+                    <div class="${cardCls}" data-iid="${b.iid}">
                         <div class="bug-row">
+                            ${checkbox}
                             <div class="bug-iid">#${b.iid}</div>
                             ${priority ? `<div class="priority-dot dot-${pCls}" title="${priority}"></div>` : ''}
-                            ${fixed}
+                            ${fixed}${statusBadge}
                         </div>
-                        <div class="bug-title">${this.escape(b.title)}</div>
+                        <div class="bug-title" data-open-iid="${b.iid}">${this.escape(b.title)}</div>
                         <div class="bug-meta">
                             <span>📅 ${date}</span>
                             ${b.author ? `<span>👤 ${this.escape(b.author)}</span>` : ''}
@@ -389,7 +591,65 @@ window.addEventListener('DOMContentLoaded', () => { send('ready'); });
 
         return `
             ${summary}
+            ${dateRange}
+            ${selectBar}
             <div class="bug-list">${list}</div>
+            ${this.bugListBehavior()}
+        `;
+    }
+
+    private renderQueueBar(): string {
+        const q = this.queueState;
+        const pct = q.total ? Math.round((q.done / q.total) * 100) : 0;
+        return `
+            <div class="queue-bar">
+                <div class="queue-text">
+                    🚀 Fixing ${q.done + 1}/${q.total}…
+                    ${q.currentIid ? `<span class="queue-current">#${q.currentIid}</span>` : ''}
+                </div>
+                <div class="queue-progress"><div class="queue-fill" style="width:${pct}%"></div></div>
+            </div>
+        `;
+    }
+
+    /** Inline script to wire up checkboxes / date inputs (delegated handlers). */
+    private bugListBehavior(): string {
+        return `
+            <script>
+            (function() {
+                document.querySelectorAll('.bug-check').forEach(el => {
+                    el.addEventListener('change', e => {
+                        e.stopPropagation();
+                        send('toggleSelect', { iid: parseInt(el.dataset.iid, 10) });
+                    });
+                    el.addEventListener('click', e => e.stopPropagation());
+                });
+                document.querySelectorAll('[data-open-iid]').forEach(el => {
+                    el.addEventListener('click', e => {
+                        send('openBug', { iid: parseInt(el.dataset.openIid, 10) });
+                    });
+                });
+                const selAll = document.getElementById('selectAll');
+                if (selAll) selAll.addEventListener('change', () => {
+                    if (selAll.checked) send('selectAll');
+                    else send('clearSelection');
+                });
+                const fixBtn = document.getElementById('fixSelected');
+                if (fixBtn) fixBtn.addEventListener('click', () => send('fixSelected'));
+                const clearBtn = document.getElementById('clearSel');
+                if (clearBtn) clearBtn.addEventListener('click', () => send('clearSelection'));
+
+                const apply = document.getElementById('applyDate');
+                if (apply) apply.addEventListener('click', () => {
+                    send('setDateRange', {
+                        dateFrom: document.getElementById('dateFrom').value,
+                        dateTo: document.getElementById('dateTo').value,
+                    });
+                });
+                const clearDate = document.getElementById('clearDate');
+                if (clearDate) clearDate.addEventListener('click', () => send('clearDateRange'));
+            })();
+            </script>
         `;
     }
 
@@ -811,5 +1071,195 @@ const STYLES = `
         border-radius: 3px;
         font-size: 11px;
         color: var(--ff-champagne);
+    }
+
+    /* ── Date range ───────────────────────────────────────── */
+
+    .date-range {
+        display: flex;
+        gap: 6px;
+        align-items: flex-end;
+        margin-bottom: 12px;
+        padding: 8px 10px;
+        background: rgba(240, 230, 210, 0.03);
+        border: 1px solid var(--ff-border);
+        border-radius: var(--ff-radius-sm);
+        flex-wrap: wrap;
+    }
+    .date-field { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 90px; }
+    .date-field label { font-size: 10px; color: var(--ff-sage); text-transform: uppercase; letter-spacing: 0.5px; }
+    .date-field input[type="date"] {
+        font-family: inherit;
+        font-size: 11.5px;
+        padding: 5px 7px;
+        background: rgba(0, 0, 0, 0.25);
+        color: var(--ff-cream);
+        border: 1px solid var(--ff-border);
+        border-radius: 5px;
+        outline: none;
+        color-scheme: dark;
+    }
+    .date-field input[type="date"]:focus { border-color: var(--ff-champagne); }
+    .date-btn {
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 6px 12px;
+        background: var(--ff-champagne);
+        color: var(--ff-forest-deep);
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: transform 0.1s ease;
+    }
+    .date-btn:hover { transform: translateY(-1px); }
+    .date-btn-ghost {
+        background: transparent;
+        color: var(--ff-sage);
+        border: 1px solid var(--ff-border);
+    }
+    .date-btn-ghost:hover { color: var(--ff-cream); border-color: var(--ff-champagne); }
+
+    /* ── Multi-select bar ─────────────────────────────────── */
+
+    .select-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 10px;
+        background: rgba(240, 230, 210, 0.04);
+        border: 1px solid var(--ff-border);
+        border-radius: var(--ff-radius-sm);
+        margin-bottom: 10px;
+    }
+    .select-all { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: var(--ff-cream); }
+    .select-all input[type="checkbox"] {
+        width: 14px; height: 14px;
+        accent-color: var(--ff-champagne);
+        cursor: pointer;
+    }
+    .select-actions { display: flex; gap: 6px; align-items: center; }
+    .fix-btn {
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 7px 14px;
+        background: linear-gradient(135deg, var(--ff-champagne), var(--ff-amber));
+        color: var(--ff-forest-deep);
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+        box-shadow: 0 2px 8px rgba(212, 193, 156, 0.25);
+    }
+    .fix-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(212, 193, 156, 0.35); }
+    .fix-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .select-clear {
+        font-family: inherit;
+        font-size: 11px;
+        padding: 5px 10px;
+        background: transparent;
+        color: var(--ff-sage);
+        border: 1px solid var(--ff-border);
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    .select-clear:hover { color: var(--ff-cream); }
+
+    /* ── Bug card checkbox + selection state ──────────────── */
+
+    .bug-check {
+        width: 16px; height: 16px;
+        accent-color: var(--ff-champagne);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .bug-card.is-selected {
+        background: linear-gradient(135deg, rgba(212, 193, 156, 0.10) 0%, rgba(212, 193, 156, 0.04) 100%);
+        border-color: rgba(212, 193, 156, 0.45);
+    }
+    .bug-card.is-current {
+        border-color: var(--ff-champagne);
+        box-shadow: 0 0 0 2px rgba(212, 193, 156, 0.25);
+    }
+    .bug-card.is-current::before { opacity: 1; }
+    .bug-card.is-done {
+        opacity: 0.7;
+        border-color: rgba(92, 148, 114, 0.45);
+    }
+    .bug-card.is-failed {
+        border-color: rgba(177, 79, 88, 0.45);
+    }
+
+    .badge-current {
+        margin-left: auto;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        background: rgba(212, 193, 156, 0.25);
+        color: var(--ff-champagne);
+        padding: 2px 6px;
+        border-radius: 3px;
+        border: 1px solid rgba(212, 193, 156, 0.5);
+        animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse { 50% { opacity: 0.55; } }
+    .badge-success {
+        margin-left: auto;
+        font-size: 9px;
+        font-weight: 700;
+        background: rgba(92, 148, 114, 0.25);
+        color: var(--ff-emerald);
+        padding: 2px 6px;
+        border-radius: 3px;
+        border: 1px solid rgba(92, 148, 114, 0.4);
+    }
+    .badge-fail {
+        margin-left: auto;
+        font-size: 9px;
+        font-weight: 700;
+        background: rgba(177, 79, 88, 0.25);
+        color: var(--ff-burgundy);
+        padding: 2px 6px;
+        border-radius: 3px;
+        border: 1px solid rgba(177, 79, 88, 0.4);
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* ── Queue progress bar ───────────────────────────────── */
+
+    .queue-bar {
+        padding: 10px 12px;
+        background: linear-gradient(135deg, rgba(212, 193, 156, 0.10), rgba(212, 193, 156, 0.04));
+        border: 1px solid rgba(212, 193, 156, 0.30);
+        border-radius: var(--ff-radius);
+        margin-bottom: 10px;
+    }
+    .queue-text {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ff-cream);
+        margin-bottom: 6px;
+    }
+    .queue-current {
+        margin-left: 6px;
+        font-family: "SF Mono", Menlo, monospace;
+        color: var(--ff-champagne);
+        font-size: 11px;
+    }
+    .queue-progress {
+        width: 100%;
+        height: 5px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .queue-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--ff-amber), var(--ff-champagne));
+        transition: width 0.4s ease;
     }
 `;

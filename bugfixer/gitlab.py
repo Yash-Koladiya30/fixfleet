@@ -121,10 +121,13 @@ def _next_day(date_str: str) -> str:
 # ── API ────────────────────────────────────────────────────────
 
 def fetch_bug_issues(token: str, project_id: str, date_str: str = None,
-                     host: str = DEFAULT_HOST) -> list:
-    """Fetch all open issues with 'Bug' label. Paginated, optionally filtered by date.
+                     host: str = DEFAULT_HOST,
+                     date_from: str = None, date_to: str = None) -> list:
+    """Fetch all open issues with 'Bug' label. Paginated, optionally date-filtered.
 
-    Date filter is inclusive: bugs created on `date_str` (UTC).
+    Date filter (inclusive UTC):
+      - `date_str` = single day (legacy)
+      - `date_from` + `date_to` = inclusive range (preferred)
     """
     api_base = f"https://{host}/api/v4"
     encoded_project = urllib.parse.quote(project_id, safe="")
@@ -138,7 +141,12 @@ def fetch_bug_issues(token: str, project_id: str, date_str: str = None,
         "sort": "desc",
     }
 
-    if date_str:
+    if date_from or date_to:
+        if date_from:
+            params["created_after"] = f"{date_from}T00:00:00Z"
+        if date_to:
+            params["created_before"] = f"{_next_day(date_to)}T00:00:00Z"
+    elif date_str:
         end_date = _next_day(date_str)
         params["created_after"] = f"{date_str}T00:00:00Z"
         params["created_before"] = f"{end_date}T00:00:00Z"

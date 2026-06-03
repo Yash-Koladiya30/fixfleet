@@ -107,7 +107,13 @@ def cmd_list_bugs_json(args):
         _err(f"invalid --project-url: {e}")
 
     try:
-        issues = fetch_bug_issues(token, project_id, date_str=args.date, host=host)
+        issues = fetch_bug_issues(
+            token, project_id,
+            date_str=args.date,
+            date_from=getattr(args, "date_from", None),
+            date_to=getattr(args, "date_to", None),
+            host=host,
+        )
     except GitLabError as e:
         _err_from_gitlab(e)
     except Exception as e:
@@ -328,7 +334,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--project-url", help="GitLab project URL or ID")
     p.add_argument("--project-dir", help="Local project directory")
     p.add_argument("--backend", help="Backend name: claude, codex, gemini, cursor, aider, qwen, openai_compat")
-    p.add_argument("--date", help="Filter bugs created on YYYY-MM-DD")
+    p.add_argument("--date", help="Filter bugs created on YYYY-MM-DD (single day)")
+    p.add_argument("--date-from", dest="date_from", help="Filter bugs created on/after YYYY-MM-DD")
+    p.add_argument("--date-to", dest="date_to", help="Filter bugs created on/before YYYY-MM-DD")
 
     return p
 

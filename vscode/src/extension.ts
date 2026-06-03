@@ -14,6 +14,8 @@ export const output = vscode.window.createOutputChannel('FixFleet');
 export function activate(context: vscode.ExtensionContext) {
     const version = context.extension.packageJSON.version;
     output.appendLine(`━━━ FixFleet v${version} activated at ${new Date().toISOString()} ━━━`);
+    output.show(true);
+    vscode.window.showInformationMessage(`FixFleet v${version} loaded ✓`);
 
     // ── Register commands FIRST (before any async ops) ─────────
     // This guarantees the sidebar buttons work even during slow CLI checks.
@@ -23,8 +25,8 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(FixFleetWebView.viewType, webview),
 
-        vscode.commands.registerCommand('fixfleet.refresh', () => {
-            webview.refresh();
+        vscode.commands.registerCommand('fixfleet.refresh', async () => {
+            await webview.refresh();
             const bugs = webview.getBugs();
             statusBar.text = `$(rocket) FixFleet · ${bugs.length} bugs`;
         }),

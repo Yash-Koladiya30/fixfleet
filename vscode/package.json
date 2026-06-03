@@ -2,7 +2,7 @@
   "name": "fixfleet",
   "displayName": "FixFleet — AI GitLab Bug Fixer",
   "description": "Auto-fix GitLab bugs with AI agents — Claude, Codex, Gemini, Cursor, Aider, Qwen, or any OpenAI-compatible API. Premium UI.",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "publisher": "YashKoladiya30",
   "icon": "media/icon.png",
   "license": "GPL-3.0-or-later",
@@ -150,7 +150,17 @@
         "fixfleet.dateFilter": {
           "type": "string",
           "default": "",
-          "description": "Optional YYYY-MM-DD date filter for bug fetch."
+          "description": "Deprecated — use dateFrom/dateTo. Single-day YYYY-MM-DD filter."
+        },
+        "fixfleet.dateFrom": {
+          "type": "string",
+          "default": "",
+          "description": "Filter bugs created on/after YYYY-MM-DD."
+        },
+        "fixfleet.dateTo": {
+          "type": "string",
+          "default": "",
+          "description": "Filter bugs created on/before YYYY-MM-DD."
         }
       }
     }
