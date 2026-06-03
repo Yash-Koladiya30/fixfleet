@@ -16,6 +16,7 @@
 </p>
 
 <p>
+  <a href="#-screenshots"><b>Screenshots</b></a> •
   <a href="#-install"><b>Install</b></a> •
   <a href="#-how-it-works"><b>How it works</b></a> •
   <a href="#-supported-ai-agents"><b>AI backends</b></a> •
@@ -23,6 +24,27 @@
 </p>
 
 </div>
+
+---
+
+## 📸 Screenshots
+
+<table>
+<tr>
+<td width="33%" align="center">
+<img src="vscode/media/screenshots/welcome.png" alt="Welcome screen" />
+<br/><sub><b>Welcome</b><br/>3-step onboarding</sub>
+</td>
+<td width="33%" align="center">
+<img src="vscode/media/screenshots/settings-credentials.png" alt="Settings credentials" />
+<br/><sub><b>Settings</b><br/>GitLab credentials + project</sub>
+</td>
+<td width="33%" align="center">
+<img src="vscode/media/screenshots/settings-backends.png" alt="Settings backends" />
+<br/><sub><b>AI Backends</b><br/>Pick your agent · date filter</sub>
+</td>
+</tr>
+</table>
 
 ---
 

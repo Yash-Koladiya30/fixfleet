@@ -6,14 +6,34 @@ Premium UI on top of the [FixFleet](https://github.com/Yash-Koladiya30/fixfleet)
 
 ---
 
+## 📸 Screenshots
+
+### Welcome — 3-step onboarding
+
+![Welcome screen](media/screenshots/welcome.png)
+
+### Settings — GitLab credentials + project
+
+![Settings credentials](media/screenshots/settings-credentials.png)
+
+### Settings — AI backend grid + date filter
+
+![Settings backends](media/screenshots/settings-backends.png)
+
+---
+
 ## ✨ Features
 
-- 🐛 **Sidebar tree view** of open GitLab `Bug` issues, sorted by priority
-- 🎨 **Premium webview** for each bug — description, steps, expected/actual, logs all parsed
+- 🐛 **Sidebar bug list** with priority badges (High / Medium / Low) sorted by priority
+- 📅 **Date range filter** — From / To inputs in the sidebar toolbar
+- ☑️ **Multi-select + batch fix** — tick multiple bugs, fix sequentially with live progress bar
+- 🎨 **Premium webview** for each bug — description, steps, expected/actual, logs all parsed automatically
 - ✨ **One-click "Fix this bug"** — dispatches to your chosen AI agent
 - 📊 **Confidence score** — see how sure the AI is before reviewing
 - ⚙️ **Visual settings** — configure token, project, backend without touching JSON
 - 🎯 **Multi-backend support** — Claude Code, Codex, Gemini, Cursor, Aider, Qwen, or any OpenAI-compatible API
+- 🔐 **Structured error states** — 🔐 Token rejected · 📭 Project not found · 🌐 Network error · 📦 CLI missing — each with one-click recovery
+- 🔁 **Status bar** — live count of open bugs and current fix progress
 
 ## 📦 Install
 
@@ -22,7 +42,7 @@ Search `FixFleet` in the Extensions panel.
 
 ### Manual
 ```bash
-code --install-extension fixfleet-0.1.0.vsix
+code --install-extension fixfleet-0.1.2.vsix
 ```
 
 ## 🛠 Setup
@@ -31,6 +51,11 @@ code --install-extension fixfleet-0.1.0.vsix
    ```bash
    pip3 install --user fixfleet
    ```
+   Add user-bin to PATH (one-time):
+   ```bash
+   echo 'export PATH="$(python3 -m site --user-base)/bin:$PATH"' >> ~/.zshrc
+   source ~/.zshrc
+   ```
 2. Open VSCode → click the 🚀 FixFleet icon in the activity bar
 3. Click **Configure FixFleet**
 4. Paste your GitLab token + project URL → save
@@ -38,11 +63,11 @@ code --install-extension fixfleet-0.1.0.vsix
 
 ## 🎨 Design
 
-Premium classic palette:
-- Royal indigo + champagne gold accents
-- Glassmorphism cards
+Premium natural palette extracted from the FixFleet icon:
+- Forest green + cream ivory + walnut brown + champagne gold
+- Glassmorphism cards adapting to light + dark themes
 - Confidence gradient bars
-- Adapts to light + dark themes
+- Per-card status badges with pulsing animation during fix
 
 ## 📝 License
 
