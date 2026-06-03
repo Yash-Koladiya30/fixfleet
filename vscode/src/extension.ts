@@ -9,7 +9,12 @@ import { checkCliInstalled } from './fixfleetCli';
 
 let statusBar: vscode.StatusBarItem;
 
+export const output = vscode.window.createOutputChannel('FixFleet');
+
 export function activate(context: vscode.ExtensionContext) {
+    const version = context.extension.packageJSON.version;
+    output.appendLine(`━━━ FixFleet v${version} activated at ${new Date().toISOString()} ━━━`);
+
     // ── Register commands FIRST (before any async ops) ─────────
     // This guarantees the sidebar buttons work even during slow CLI checks.
 

@@ -2,7 +2,7 @@
   "name": "fixfleet",
   "displayName": "FixFleet — AI GitLab Bug Fixer",
   "description": "Auto-fix GitLab bugs with AI agents — Claude, Codex, Gemini, Cursor, Aider, Qwen, or any OpenAI-compatible API. Premium UI.",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "publisher": "YashKoladiya30",
   "icon": "media/icon.png",
   "license": "GPL-3.0-or-later",

@@ -75,6 +75,8 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
         }
     }
 
+    private refreshSeq = 0;
+
     public async refresh() {
         if (!this.view) return;
 
@@ -89,15 +91,27 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
             return;
         }
 
+        const mySeq = ++this.refreshSeq;
         this.currentState = 'loading';
         this.render();
 
+        // Hard watchdog: if listBugs hasn't resolved in 50s, force-error.
+        const watchdog = setTimeout(() => {
+            if (this.refreshSeq !== mySeq) return;
+            this.currentState = 'error-generic';
+            this.errorMsg =
+                'Request took too long. Check the FixFleet CLI is installed and your network can reach GitLab.';
+            this.render();
+        }, 25_000);
+
         try {
             const result = await listBugs({ token, projectUrl, date: date || undefined });
+            if (this.refreshSeq !== mySeq) return; // stale
             this.bugs = result.issues || [];
             this.currentState = this.bugs.length > 0 ? 'has-bugs' : 'empty';
             this.errorMsg = '';
         } catch (e) {
+            if (this.refreshSeq !== mySeq) return; // stale
             this.bugs = [];
             if (e instanceof FixFleetError) {
                 this.errorMsg = e.message;
@@ -110,6 +124,8 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
                 this.errorMsg = (e as Error).message || 'Unknown error';
                 this.currentState = 'error-generic';
             }
+        } finally {
+            clearTimeout(watchdog);
         }
         this.render();
     }
