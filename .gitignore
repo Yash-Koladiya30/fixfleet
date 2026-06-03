@@ -54,6 +54,9 @@ credentials.*
 *-secret.*
 *-credentials.*
 
+# Allow screenshot files (not actual credentials)
+!vscode/media/screenshots/*.png
+
 # GitLab CI artifacts
 .gitlab/
 artifacts/
