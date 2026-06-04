@@ -1,7 +1,7 @@
 {
   "name": "fixfleet",
-  "displayName": "FixFleet — AI GitLab Bug Fixer",
-  "description": "Auto-fix GitLab bugs with AI agents — Claude, Codex, Gemini, Cursor, Aider, Qwen, or any OpenAI-compatible API. Premium UI.",
+  "displayName": "FixFleet — AI Bug Fixer for GitHub, GitLab, Jira, Linear, Bitbucket, Azure DevOps",
+  "description": "Auto-fix bugs from GitHub, GitLab, Jira, Linear, Bitbucket, or Azure DevOps using AI agents — Claude, Codex, Gemini, Cursor, Aider, Qwen, Groq, OpenAI-compatible. Premium UI.",
   "version": "0.1.2",
   "publisher": "YashKoladiya30",
   "icon": "media/icon.png",
@@ -16,14 +16,25 @@
     "Other"
   ],
   "keywords": [
+    "github",
     "gitlab",
+    "jira",
+    "linear",
+    "bitbucket",
+    "azure-devops",
+    "azure-boards",
+    "atlassian",
+    "issue-tracker",
     "bug-fixer",
+    "bug-tracker",
+    "auto-fix",
     "ai-agent",
     "agentic-ai",
     "claude",
     "claude-code",
     "codex",
     "openai",
+    "gpt",
     "gemini",
     "cursor",
     "aider",
@@ -31,9 +42,9 @@
     "groq",
     "ollama",
     "fixfleet",
-    "auto-fix",
-    "issue-tracker",
-    "devops"
+    "devops",
+    "code-review",
+    "code-quality"
   ],
   "repository": {
     "type": "git",

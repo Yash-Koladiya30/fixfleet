@@ -76,11 +76,19 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
             case 'install':
                 vscode.commands.executeCommand('fixfleet.installCli');
                 break;
-            case 'openTokenPage':
-                vscode.env.openExternal(
-                    vscode.Uri.parse('https://gitlab.com/-/user_settings/personal_access_tokens'),
-                );
+            case 'openTokenPage': {
+                const provider = vscode.workspace.getConfiguration('fixfleet').get<string>('provider') || 'gitlab';
+                const tokenUrls: Record<string, string> = {
+                    gitlab: 'https://gitlab.com/-/user_settings/personal_access_tokens',
+                    github: 'https://github.com/settings/tokens',
+                    bitbucket: 'https://bitbucket.org/account/settings/app-passwords/',
+                    jira: 'https://id.atlassian.com/manage-profile/security/api-tokens',
+                    linear: 'https://linear.app/settings/api',
+                    azure: 'https://dev.azure.com/_usersSettings/tokens',
+                };
+                vscode.env.openExternal(vscode.Uri.parse(tokenUrls[provider] || tokenUrls.gitlab));
                 break;
+            }
             case 'toggleSelect':
                 if (this.selected.has(msg.iid)) this.selected.delete(msg.iid);
                 else this.selected.add(msg.iid);
@@ -234,7 +242,7 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
             resolved = true;
             this.currentState = 'error-generic';
             this.errorMsg =
-                'Request took too long. Check the FixFleet CLI is installed and your network can reach GitLab.';
+                `Request took too long. Check the FixFleet CLI is installed and your network can reach ${this.providerName()}.`;
             this.render();
         }, 25_000);
 
@@ -339,7 +347,7 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
                 <div class="step">
                     <div class="step-num">1</div>
                     <div class="step-body">
-                        <div class="step-title">Connect your GitLab</div>
+                        <div class="step-title">Connect your tracker</div>
                         <div class="step-text">Paste your token + project URL to start.</div>
                     </div>
                 </div>
@@ -367,11 +375,20 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
         `;
     }
 
+    private providerName(): string {
+        const key = vscode.workspace.getConfiguration('fixfleet').get<string>('provider') || 'gitlab';
+        const map: Record<string, string> = {
+            gitlab: 'GitLab', github: 'GitHub', bitbucket: 'Bitbucket',
+            jira: 'Jira', linear: 'Linear', azure: 'Azure DevOps',
+        };
+        return map[key] || 'tracker';
+    }
+
     private renderLoading(): string {
         return `
             <div class="state-card">
                 <div class="loader"></div>
-                <div class="state-title">Fetching bugs from GitLab…</div>
+                <div class="state-title">Fetching bugs from ${this.providerName()}…</div>
                 <div class="muted">Pre-narrowing search space for faster fixes.</div>
             </div>
         `;
@@ -397,7 +414,7 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
         return `
             <div class="state-card error-card">
                 <div class="big-emoji">🔐</div>
-                <div class="state-title">GitLab token rejected</div>
+                <div class="state-title">${this.providerName()} token rejected</div>
                 <div class="error-msg">${this.escape(this.errorMsg)}</div>
                 <div class="muted">Your token is invalid, expired, or lacks the required scope.</div>
                 <button class="btn btn-primary btn-block" onclick="send('openTokenPage')">
@@ -430,9 +447,9 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
         return `
             <div class="state-card error-card">
                 <div class="big-emoji">🌐</div>
-                <div class="state-title">Can't reach GitLab</div>
+                <div class="state-title">Can't reach ${this.providerName()}</div>
                 <div class="error-msg">${this.escape(this.errorMsg)}</div>
-                <div class="muted">Check your internet connection. If using self-hosted GitLab, verify the host is reachable.</div>
+                <div class="muted">Check your internet connection. If using self-hosted ${this.providerName()}, verify the host is reachable.</div>
                 <button class="btn btn-primary btn-block" onclick="send('refresh')">Try again</button>
                 <button class="btn btn-ghost" onclick="send('configure')">Open Settings</button>
             </div>

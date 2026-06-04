@@ -325,7 +325,7 @@ export class SettingsPanel {
 </head><body>
 <div class="wrap">
     <h1 class="brand">🚀 FixFleet</h1>
-    <div class="tagline">Premium settings — Fleet of AI agents fixing GitLab bugs.</div>
+    <div class="tagline">Premium settings — Fleet of AI agents fixing bugs across any tracker.</div>
 
     <div id="install-warning">
         <strong>⚠ FixFleet CLI not installed.</strong>
@@ -338,7 +338,7 @@ export class SettingsPanel {
     <section class="card">
         <div class="card-title">🔌 Issue Tracker Provider</div>
         <label>Where do your bugs live?
-            <span class="hint">Pick your platform. Only GitLab is fully supported today — others are coming soon.</span>
+            <span class="hint">Pick your platform. FixFleet supports 6 trackers — URL is auto-detected.</span>
         </label>
         <div id="provider-grid" class="backend-grid"></div>
         <input type="hidden" id="provider" value="gitlab">
@@ -354,10 +354,10 @@ export class SettingsPanel {
 
     <section class="card">
         <div class="card-title">📦 Project</div>
-        <label>GitLab Project URL
-            <span class="hint">Paste the full URL — we'll extract host + project path automatically.</span>
+        <label>Project / Repository URL
+            <span class="hint">Paste the full URL from your browser — provider + host + path auto-detected.</span>
         </label>
-        <input type="text" id="projectUrl" placeholder="https://gitlab.com/group/project">
+        <input type="text" id="projectUrl" placeholder="https://github.com/owner/repo  ·  https://gitlab.com/group/project  ·  ...">
 
         <label style="margin-top:18px;">Local Project Directory
             <span class="hint">Where the AI will edit files. Should be the cloned repo on your Mac.</span>
