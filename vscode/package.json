@@ -10,24 +10,34 @@
     "vscode": "^1.80.0"
   },
   "categories": [
-    "Other",
     "AI",
-    "Machine Learning"
+    "Machine Learning",
+    "Linters",
+    "Other"
   ],
   "keywords": [
     "gitlab",
-    "ai",
     "bug-fixer",
+    "ai-agent",
+    "agentic-ai",
     "claude",
+    "claude-code",
     "codex",
+    "openai",
     "gemini",
     "cursor",
     "aider",
-    "agentic"
+    "qwen",
+    "groq",
+    "ollama",
+    "fixfleet",
+    "auto-fix",
+    "issue-tracker",
+    "devops"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Yash-Koladiya30/fixfleet-vscode"
+    "url": "https://github.com/Yash-Koladiya30/fixfleet"
   },
   "homepage": "https://github.com/Yash-Koladiya30/fixfleet-vscode",
   "bugs": {
