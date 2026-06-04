@@ -83,17 +83,35 @@ def cmd_backends_json():
     presets = [
         {"key": k, **v} for k, v in API_PRESETS.items()
     ]
+    from .providers.registry import provider_metadata
     _emit({
         "ok": True,
         "version": __version__,
         "cli_backends": installed + missing,
         "api_presets": presets,
+        "providers": provider_metadata(),
+    })
+
+
+def cmd_providers_json():
+    """Output all registered issue-tracker providers (UI dropdown source)."""
+    from .providers.registry import provider_metadata
+    _emit({
+        "ok": True,
+        "providers": provider_metadata(),
     })
 
 
 # ── List bugs ──────────────────────────────────────────────────
 
 def cmd_list_bugs_json(args):
+    from .providers import (
+        ProviderError,
+        ProviderNotImplementedError,
+        detect_provider_from_url,
+        get_provider,
+    )
+
     token = args.token
     project_url = args.project_url
     if not token:
@@ -101,20 +119,28 @@ def cmd_list_bugs_json(args):
     if not project_url:
         _err("--project-url required")
 
+    # Pick provider: explicit flag wins, else auto-detect from URL, else default to GitLab.
+    provider = get_provider(args.provider) if args.provider else None
+    if provider is None:
+        provider = detect_provider_from_url(project_url) or get_provider("gitlab")
+
     try:
-        host, project_id = parse_project_input(project_url)
+        host, project_id = provider.parse_url(project_url)
     except ValueError as e:
         _err(f"invalid --project-url: {e}")
 
     try:
-        issues = fetch_bug_issues(
-            token, project_id,
+        issues = provider.fetch_bugs(
+            token=token,
+            project_id=project_id,
+            host=host,
             date_str=args.date,
             date_from=getattr(args, "date_from", None),
             date_to=getattr(args, "date_to", None),
-            host=host,
         )
-    except GitLabError as e:
+    except ProviderNotImplementedError as e:
+        _err_from_gitlab(e)
+    except ProviderError as e:
         _err_from_gitlab(e)
     except Exception as e:
         _err(f"unexpected error: {e}", error_code="unexpected")
@@ -170,8 +196,18 @@ def cmd_fix_issue(args):
     if not Path(project_dir).is_dir():
         _err(f"project-dir not found: {project_dir}")
 
+    from .providers import (
+        ProviderError,
+        ProviderNotImplementedError,
+        detect_provider_from_url,
+        get_provider,
+    )
+    provider = get_provider(args.provider) if args.provider else None
+    if provider is None:
+        provider = detect_provider_from_url(project_url) or get_provider("gitlab")
+
     try:
-        host, project_id = parse_project_input(project_url)
+        host, project_id = provider.parse_url(project_url)
     except ValueError as e:
         _err(f"invalid project-url: {e}")
 
@@ -200,8 +236,10 @@ def cmd_fix_issue(args):
 
     # Fetch + find target issue
     try:
-        issues = fetch_bug_issues(token, project_id, host=host)
-    except GitLabError as e:
+        issues = provider.fetch_bugs(token=token, project_id=project_id, host=host)
+    except ProviderNotImplementedError as e:
+        _err_from_gitlab(e)
+    except ProviderError as e:
         _err_from_gitlab(e)
     target = next((i for i in issues if i.get("iid") == issue_iid), None)
     if target is None:
@@ -323,6 +361,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # JSON / non-interactive modes
     p.add_argument("--backends-json", action="store_true", help="List installed backends as JSON")
+    p.add_argument("--providers-json", action="store_true", help="List supported issue-tracker providers as JSON")
     p.add_argument("--list-bugs-json", action="store_true", help="Fetch open bugs as JSON")
     p.add_argument("--fix-issue", type=int, metavar="IID", help="Fix one issue by IID, output JSON")
     p.add_argument("--config-get", action="store_true", help="Print current config as JSON (redacted)")
@@ -330,10 +369,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Set a config key (use dot notation, e.g. api.base_url=...)")
 
     # Shared params for non-interactive calls
-    p.add_argument("--token", help="GitLab token (or set BUGFIXER_TOKEN env var)")
-    p.add_argument("--project-url", help="GitLab project URL or ID")
+    p.add_argument("--token", help="Issue-tracker token (or set BUGFIXER_TOKEN env var)")
+    p.add_argument("--project-url", help="Project URL or ID")
     p.add_argument("--project-dir", help="Local project directory")
-    p.add_argument("--backend", help="Backend name: claude, codex, gemini, cursor, aider, qwen, openai_compat")
+    p.add_argument("--provider", default="gitlab",
+                   help="Issue-tracker provider: gitlab (default), github, jira, linear")
+    p.add_argument("--backend", help="AI backend name: claude, codex, gemini, cursor, aider, qwen, openai_compat")
     p.add_argument("--date", help="Filter bugs created on YYYY-MM-DD (single day)")
     p.add_argument("--date-from", dest="date_from", help="Filter bugs created on/after YYYY-MM-DD")
     p.add_argument("--date-to", dest="date_to", help="Filter bugs created on/before YYYY-MM-DD")
@@ -354,6 +395,9 @@ def main():
 
     if args.backends_json:
         cmd_backends_json()
+        return
+    if args.providers_json:
+        cmd_providers_json()
         return
     if args.list_bugs_json:
         cmd_list_bugs_json(args)

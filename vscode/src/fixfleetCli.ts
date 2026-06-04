@@ -34,6 +34,15 @@ export interface BackendInfo {
     installed: boolean;
 }
 
+export interface ProviderInfo {
+    key: string;
+    display_name: string;
+    tagline: string;
+    implemented: boolean;
+    token_url: string;
+    token_scope_hint: string;
+}
+
 export interface ConfidenceReport {
     final_score: number;
     label: string;
@@ -276,19 +285,26 @@ export async function checkCliInstalled(): Promise<{ installed: boolean; version
     }
 }
 
-export async function listBackends(): Promise<{ cli_backends: BackendInfo[]; api_presets: any[] }> {
+export async function listBackends(): Promise<{ cli_backends: BackendInfo[]; api_presets: any[]; providers?: ProviderInfo[] }> {
     const res = await runJson(['--backends-json']);
+    return unwrap(res);
+}
+
+export async function listProviders(): Promise<{ providers: ProviderInfo[] }> {
+    const res = await runJson(['--providers-json']);
     return unwrap(res);
 }
 
 export async function listBugs(opts: {
     token: string;
     projectUrl: string;
+    provider?: string;
     date?: string;
     dateFrom?: string;
     dateTo?: string;
 }): Promise<{ host: string; project_id: string; issues: BugIssue[] }> {
     const args = ['--list-bugs-json', '--token', opts.token, '--project-url', opts.projectUrl];
+    if (opts.provider) args.push('--provider', opts.provider);
     if (opts.dateFrom) args.push('--date-from', opts.dateFrom);
     if (opts.dateTo) args.push('--date-to', opts.dateTo);
     if (opts.date && !opts.dateFrom && !opts.dateTo) args.push('--date', opts.date);
@@ -303,6 +319,7 @@ export async function fixBug(opts: {
     token: string;
     projectUrl: string;
     projectDir: string;
+    provider?: string;
 }): Promise<FixResult> {
     const args = [
         '--fix-issue', String(opts.issueIid),
@@ -311,5 +328,6 @@ export async function fixBug(opts: {
         '--project-url', opts.projectUrl,
         '--project-dir', opts.projectDir,
     ];
+    if (opts.provider) args.push('--provider', opts.provider);
     return runJson(args, 900_000);
 }

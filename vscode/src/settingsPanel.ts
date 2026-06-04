@@ -39,6 +39,7 @@ export class SettingsPanel {
                 break;
 
             case 'save':
+                await cfg.update('provider', msg.provider || 'gitlab', vscode.ConfigurationTarget.Global);
                 await cfg.update('gitlabToken', msg.gitlabToken || '', vscode.ConfigurationTarget.Global);
                 await cfg.update('projectUrl', msg.projectUrl || '', vscode.ConfigurationTarget.Global);
                 await cfg.update('projectDir', msg.projectDir || '', vscode.ConfigurationTarget.Global);
@@ -80,6 +81,9 @@ export class SettingsPanel {
         try {
             const result = await listBackends();
             backends = result.cli_backends || [];
+            // Providers come back inside listBackends() too in v0.4.2+
+            const providers = (result as any).providers || [];
+            (this as any)._providersCache = providers;
         } catch (e) {
             this.panel.webview.postMessage({
                 cmd: 'cliMissing',
@@ -91,6 +95,7 @@ export class SettingsPanel {
         this.panel.webview.postMessage({
             cmd: 'data',
             settings: {
+                provider: cfg.get<string>('provider') || 'gitlab',
                 gitlabToken: cfg.get<string>('gitlabToken') || '',
                 projectUrl: cfg.get<string>('projectUrl') || '',
                 projectDir: cfg.get<string>('projectDir') || '',
@@ -98,6 +103,7 @@ export class SettingsPanel {
                 dateFilter: cfg.get<string>('dateFilter') || '',
             },
             backends,
+            providers: (this as any)._providersCache || [],
             workspaceDir: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '',
         });
     }
@@ -330,9 +336,18 @@ export class SettingsPanel {
     </div>
 
     <section class="card">
-        <div class="card-title">🔑 GitLab Credentials</div>
-        <label>Personal Access Token
-            <span class="hint">Scope: <code>api</code> or <code>read_api</code>. Get one at <a class="help-link" href="https://gitlab.com/-/user_settings/personal_access_tokens" target="_blank">gitlab.com → Access Tokens</a></span>
+        <div class="card-title">🔌 Issue Tracker Provider</div>
+        <label>Where do your bugs live?
+            <span class="hint">Pick your platform. Only GitLab is fully supported today — others are coming soon.</span>
+        </label>
+        <div id="provider-grid" class="backend-grid"></div>
+        <input type="hidden" id="provider" value="gitlab">
+    </section>
+
+    <section class="card">
+        <div class="card-title">🔑 Access Token</div>
+        <label id="token-label">Personal Access Token
+            <span class="hint" id="token-hint">Scope: <code>api</code> or <code>read_api</code>. Get one at <a class="help-link" id="token-link" href="https://gitlab.com/-/user_settings/personal_access_tokens" target="_blank">gitlab.com → Access Tokens</a></span>
         </label>
         <input type="password" id="gitlabToken" placeholder="glpat-xxxxxxxxxxxxxxxxxxxx">
     </section>
@@ -381,8 +396,43 @@ export class SettingsPanel {
 
 <script>
 const vscode = acquireVsCodeApi();
-const fields = ['gitlabToken','projectUrl','projectDir','backend','dateFilter'];
+const fields = ['provider','gitlabToken','projectUrl','projectDir','backend','dateFilter'];
 let backends = [];
+let providers = [];
+
+function selectProvider(key) {
+    document.getElementById('provider').value = key;
+    document.querySelectorAll('#provider-grid .backend-card').forEach(el => {
+        el.classList.toggle('selected', el.dataset.providerKey === key);
+    });
+    // Update token hint based on selected provider
+    const p = providers.find(x => x.key === key);
+    if (p) {
+        document.getElementById('token-link').href = p.token_url || '#';
+        document.getElementById('token-link').textContent = p.token_url ? 'Generate token' : '';
+        document.getElementById('token-hint').innerHTML =
+            'Scope: <code>' + (p.token_scope_hint || 'see docs') + '</code>. ' +
+            (p.token_url ? '<a class="help-link" href="' + p.token_url + '" target="_blank">Generate token →</a>' : '');
+    }
+}
+
+function renderProviders(list, current) {
+    const grid = document.getElementById('provider-grid');
+    grid.innerHTML = '';
+    (list || []).forEach(p => {
+        const card = document.createElement('div');
+        const available = p.implemented;
+        card.className = 'backend-card' + (available ? '' : ' unavailable') + (p.key === current ? ' selected' : '');
+        card.dataset.providerKey = p.key;
+        card.innerHTML =
+            '<div class="backend-name">' + p.display_name + '</div>' +
+            '<div class="backend-meta">' + (p.tagline || '') + '</div>' +
+            '<span class="backend-badge ' + (available ? 'badge-installed' : 'badge-missing') + '">' +
+            (available ? 'AVAILABLE' : 'COMING SOON') + '</span>';
+        if (available) card.onclick = () => selectProvider(p.key);
+        grid.appendChild(card);
+    });
+}
 
 function selectBackend(name) {
     document.getElementById('backend').value = name;
@@ -430,7 +480,10 @@ window.addEventListener('message', event => {
             if (el && m.settings[f] !== undefined) el.value = m.settings[f];
         });
         backends = m.backends;
+        providers = m.providers || [];
         renderBackends(backends, m.settings.backend);
+        renderProviders(providers, m.settings.provider || 'gitlab');
+        selectProvider(m.settings.provider || 'gitlab');
     } else if (m.cmd === 'cliMissing') {
         document.getElementById('install-warning').classList.add('visible');
     } else if (m.cmd === 'dirPicked') {

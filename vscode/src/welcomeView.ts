@@ -124,6 +124,7 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
         const cfg = vscode.workspace.getConfiguration('fixfleet');
         const token = cfg.get<string>('gitlabToken') || '';
         const projectUrl = cfg.get<string>('projectUrl') || '';
+        const provider = cfg.get<string>('provider') || 'gitlab';
         const backend = cfg.get<string>('backend') || 'claude';
         let projectDir = cfg.get<string>('projectDir') || '';
         if (!projectDir) {
@@ -158,6 +159,7 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
                     token,
                     projectUrl,
                     projectDir,
+                    provider,
                 });
                 const label = res.confidence?.label || (res.success ? 'Done' : 'Failed');
                 this.queueState.results.push({
@@ -214,6 +216,7 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
         const date = cfg.get<string>('dateFilter') || '';
         const dateFrom = cfg.get<string>('dateFrom') || '';
         const dateTo = cfg.get<string>('dateTo') || '';
+        const provider = cfg.get<string>('provider') || 'gitlab';
 
         if (!token || !projectUrl) {
             this.currentState = 'not-configured';
@@ -238,6 +241,7 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
         try {
             const result = await listBugs({
                 token, projectUrl,
+                provider: provider || undefined,
                 date: date || undefined,
                 dateFrom: dateFrom || undefined,
                 dateTo: dateTo || undefined,

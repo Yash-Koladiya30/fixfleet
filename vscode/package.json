@@ -135,16 +135,28 @@
           "default": "python3",
           "description": "Path to Python interpreter (fallback if CLI binary not on PATH)."
         },
+        "fixfleet.provider": {
+          "type": "string",
+          "enum": ["gitlab", "github", "jira", "linear"],
+          "enumDescriptions": [
+            "GitLab — fully supported (gitlab.com or self-hosted)",
+            "GitHub — coming soon (stub)",
+            "Jira — coming soon (stub)",
+            "Linear — coming soon (stub)"
+          ],
+          "default": "gitlab",
+          "description": "Issue-tracker provider."
+        },
         "fixfleet.gitlabToken": {
           "type": "string",
           "default": "",
-          "description": "GitLab Personal Access Token (scope: api or read_api). Stored in user settings.",
+          "description": "Issue-tracker access token (label kept as gitlabToken for backwards compat). Stored in user settings.",
           "scope": "application"
         },
         "fixfleet.projectUrl": {
           "type": "string",
           "default": "",
-          "description": "GitLab project URL (e.g. https://gitlab.com/group/project)."
+          "description": "Project URL (e.g. https://gitlab.com/group/project, https://github.com/owner/repo)."
         },
         "fixfleet.projectDir": {
           "type": "string",
