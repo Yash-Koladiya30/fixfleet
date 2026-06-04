@@ -1,7 +1,6 @@
 """Issue-tracker provider abstraction.
 
-Currently fully implemented: GitLab.
-Stubs (UI-visible, raise NotImplementedError on call): GitHub, Jira, Linear.
+Fully implemented: GitLab, GitHub, Bitbucket, Jira, Linear, Azure DevOps.
 
 Add a new provider:
   1. Create bugfixer/providers/<name>.py implementing Provider.

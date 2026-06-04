@@ -1,5 +1,7 @@
 """Provider registry — list, lookup, auto-detect."""
 
+from .azure import AzureDevOpsProvider
+from .bitbucket import BitbucketProvider
 from .github import GitHubProvider
 from .gitlab import GitLabProvider
 from .jira import JiraProvider
@@ -8,10 +10,12 @@ from .linear import LinearProvider
 
 # Registered providers — order matters for UI dropdown rendering.
 PROVIDERS = {
-    "gitlab": GitLabProvider(),
-    "github": GitHubProvider(),
-    "jira":   JiraProvider(),
-    "linear": LinearProvider(),
+    "gitlab":    GitLabProvider(),
+    "github":    GitHubProvider(),
+    "bitbucket": BitbucketProvider(),
+    "jira":      JiraProvider(),
+    "linear":    LinearProvider(),
+    "azure":     AzureDevOpsProvider(),
 }
 
 ALL_PROVIDER_KEYS = list(PROVIDERS.keys())

@@ -137,12 +137,14 @@
         },
         "fixfleet.provider": {
           "type": "string",
-          "enum": ["gitlab", "github", "jira", "linear"],
+          "enum": ["gitlab", "github", "bitbucket", "jira", "linear", "azure"],
           "enumDescriptions": [
-            "GitLab — fully supported (gitlab.com or self-hosted)",
-            "GitHub — coming soon (stub)",
-            "Jira — coming soon (stub)",
-            "Linear — coming soon (stub)"
+            "GitLab (gitlab.com or self-hosted)",
+            "GitHub (github.com or Enterprise)",
+            "Bitbucket Cloud (bitbucket.org)",
+            "Jira (Atlassian Cloud)",
+            "Linear (linear.app)",
+            "Azure DevOps Boards"
           ],
           "default": "gitlab",
           "description": "Issue-tracker provider."

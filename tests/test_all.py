@@ -556,5 +556,83 @@ class TestStateAndConfig(unittest.TestCase):
         self.assertFalse(self.state_mod.was_fixed("g/p", 999))
 
 
+class TestProviders(unittest.TestCase):
+    """URL parsing + registry tests for all providers."""
+
+    def test_registry_has_all_providers(self):
+        from bugfixer.providers import ALL_PROVIDER_KEYS, PROVIDERS
+        self.assertEqual(
+            set(ALL_PROVIDER_KEYS),
+            {"gitlab", "github", "bitbucket", "jira", "linear", "azure"},
+        )
+        for key, p in PROVIDERS.items():
+            self.assertTrue(p.implemented, f"{key} should be implemented")
+
+    def test_github_parse_url(self):
+        from bugfixer.providers import get_provider
+        p = get_provider("github")
+        self.assertEqual(p.parse_url("https://github.com/owner/repo"), ("github.com", "owner/repo"))
+        self.assertEqual(p.parse_url("https://github.com/owner/repo.git"), ("github.com", "owner/repo"))
+        self.assertEqual(p.parse_url("https://github.com/owner/repo/issues/42"), ("github.com", "owner/repo"))
+        self.assertEqual(p.parse_url("git@github.com:owner/repo.git"), ("github.com", "owner/repo"))
+        self.assertEqual(p.parse_url("owner/repo"), ("github.com", "owner/repo"))
+
+    def test_bitbucket_parse_url(self):
+        from bugfixer.providers import get_provider
+        p = get_provider("bitbucket")
+        self.assertEqual(p.parse_url("https://bitbucket.org/team/repo"), ("bitbucket.org", "team/repo"))
+        self.assertEqual(p.parse_url("team/repo"), ("bitbucket.org", "team/repo"))
+
+    def test_jira_parse_url(self):
+        from bugfixer.providers import get_provider
+        p = get_provider("jira")
+        h, k = p.parse_url("https://acme.atlassian.net/jira/projects/MYPROJ")
+        self.assertEqual((h, k), ("acme.atlassian.net", "MYPROJ"))
+        h, k = p.parse_url("https://acme.atlassian.net/browse/MYPROJ-42")
+        self.assertEqual((h, k), ("acme.atlassian.net", "MYPROJ"))
+
+    def test_linear_parse_url(self):
+        from bugfixer.providers import get_provider
+        p = get_provider("linear")
+        h, k = p.parse_url("https://linear.app/acme/team/ENG/all")
+        self.assertEqual((h, k), ("linear.app", "ENG"))
+        h, k = p.parse_url("https://linear.app/acme/issue/ENG-42/some-title")
+        self.assertEqual((h, k), ("linear.app", "ENG"))
+        h, k = p.parse_url("ENG")
+        self.assertEqual((h, k), ("linear.app", "ENG"))
+
+    def test_azure_parse_url(self):
+        from bugfixer.providers import get_provider
+        p = get_provider("azure")
+        h, k = p.parse_url("https://dev.azure.com/myorg/myproject")
+        self.assertEqual((h, k), ("dev.azure.com", "myorg/myproject"))
+        h, k = p.parse_url("https://dev.azure.com/myorg/myproject/_workitems/edit/123")
+        self.assertEqual((h, k), ("dev.azure.com", "myorg/myproject"))
+
+    def test_url_auto_detection(self):
+        from bugfixer.providers import detect_provider_from_url
+        cases = [
+            ("https://gitlab.com/g/p", "gitlab"),
+            ("https://github.com/o/r", "github"),
+            ("https://bitbucket.org/t/r", "bitbucket"),
+            ("https://acme.atlassian.net/browse/X-1", "jira"),
+            ("https://linear.app/acme/team/ENG", "linear"),
+            ("https://dev.azure.com/myorg/myproject", "azure"),
+        ]
+        for url, expected_key in cases:
+            with self.subTest(url=url):
+                p = detect_provider_from_url(url)
+                self.assertIsNotNone(p, f"No provider detected for {url}")
+                self.assertEqual(p.key, expected_key)
+
+    def test_provider_metadata_serializable(self):
+        from bugfixer.providers.registry import provider_metadata
+        import json
+        meta = provider_metadata()
+        # Must be JSON-serializable (used by extension)
+        self.assertEqual(json.loads(json.dumps(meta)), meta)
+        self.assertEqual(len(meta), 6)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

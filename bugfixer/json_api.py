@@ -241,7 +241,10 @@ def cmd_fix_issue(args):
         _err_from_gitlab(e)
     except ProviderError as e:
         _err_from_gitlab(e)
-    target = next((i for i in issues if i.get("iid") == issue_iid), None)
+    target = next(
+        (i for i in issues if str(i.get("iid")) == str(issue_iid)),
+        None,
+    )
     if target is None:
         _err(f"issue #{issue_iid} not found among open Bug-labeled issues")
 
@@ -363,7 +366,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--backends-json", action="store_true", help="List installed backends as JSON")
     p.add_argument("--providers-json", action="store_true", help="List supported issue-tracker providers as JSON")
     p.add_argument("--list-bugs-json", action="store_true", help="Fetch open bugs as JSON")
-    p.add_argument("--fix-issue", type=int, metavar="IID", help="Fix one issue by IID, output JSON")
+    p.add_argument("--fix-issue", type=str, metavar="IID",
+                   help="Fix one issue by IID, output JSON (int for GitLab/GitHub/etc, key like MYPROJ-42 for Jira)")
     p.add_argument("--config-get", action="store_true", help="Print current config as JSON (redacted)")
     p.add_argument("--config-set", action="append", metavar="KEY=VALUE",
                    help="Set a config key (use dot notation, e.g. api.base_url=...)")

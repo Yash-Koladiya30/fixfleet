@@ -32,7 +32,7 @@ def get_daily_usage(backend_name: str) -> int:
     return int(data.get("usage", {}).get(_today(), {}).get(backend_name, {}).get("tokens", 0))
 
 
-def record_usage(backend_name: str, tokens: int, project_id: str, issue_iid: int, success: bool):
+def record_usage(backend_name: str, tokens: int, project_id: str, issue_iid, success: bool):
     data = _load()
     today = _today()
 
@@ -58,12 +58,12 @@ def record_usage(backend_name: str, tokens: int, project_id: str, issue_iid: int
     _save(data)
 
 
-def was_attempted(project_id: str, issue_iid: int) -> list:
+def was_attempted(project_id: str, issue_iid) -> list:
     data = _load()
     return data.get("attempts", {}).get(f"{project_id}#{issue_iid}", [])
 
 
-def was_fixed(project_id: str, issue_iid: int) -> bool:
+def was_fixed(project_id: str, issue_iid) -> bool:
     return any(a.get("success") for a in was_attempted(project_id, issue_iid))
 
 
