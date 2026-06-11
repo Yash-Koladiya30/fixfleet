@@ -405,14 +405,26 @@ function selectProvider(key) {
     document.querySelectorAll('#provider-grid .backend-card').forEach(el => {
         el.classList.toggle('selected', el.dataset.providerKey === key);
     });
-    // Update token hint based on selected provider
+    // Update token hint based on selected provider.
+    // NOTE: do NOT getElementById('token-link') here — it lives inside
+    // token-hint and is destroyed by the first innerHTML replacement.
     const p = providers.find(x => x.key === key);
     if (p) {
-        document.getElementById('token-link').href = p.token_url || '#';
-        document.getElementById('token-link').textContent = p.token_url ? 'Generate token' : '';
         document.getElementById('token-hint').innerHTML =
-            'Scope: <code>' + (p.token_scope_hint || 'see docs') + '</code>. ' +
+            'Format: <code>' + (p.token_scope_hint || 'see docs') + '</code>. ' +
             (p.token_url ? '<a class="help-link" href="' + p.token_url + '" target="_blank">Generate token →</a>' : '');
+        const tokenInput = document.getElementById('gitlabToken');
+        if (tokenInput) {
+            const placeholders = {
+                gitlab: 'glpat-xxxxxxxxxxxxxxxxxxxx',
+                github: 'ghp_xxxxxxxxxxxxxxxxxxxx',
+                bitbucket: 'username:app-password',
+                jira: 'email@example.com:api-token',
+                linear: 'lin_api_xxxxxxxxxxxxxxxxxxxx',
+                azure: 'azure-devops-pat',
+            };
+            tokenInput.placeholder = placeholders[key] || 'access token';
+        }
     }
 }
 
@@ -436,7 +448,9 @@ function renderProviders(list, current) {
 
 function selectBackend(name) {
     document.getElementById('backend').value = name;
-    document.querySelectorAll('.backend-card').forEach(el => {
+    // Scoped to #backend-grid — unscoped selector would also wipe the
+    // provider grid's selection (both use .backend-card).
+    document.querySelectorAll('#backend-grid .backend-card').forEach(el => {
         el.classList.toggle('selected', el.dataset.name === name);
     });
 }
