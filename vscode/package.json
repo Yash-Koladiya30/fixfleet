@@ -2,7 +2,7 @@
   "name": "fixfleet",
   "displayName": "FixFleet — AI Bug Fixer for GitHub, GitLab, Jira, Linear, Bitbucket, Azure DevOps",
   "description": "Auto-fix bugs from GitHub, GitLab, Jira, Linear, Bitbucket, or Azure DevOps using AI agents — Claude, Codex, Gemini, Cursor, Aider, Qwen, Groq, OpenAI-compatible. Premium UI.",
-  "version": "0.2.0",
+  "version": "0.1.3",
   "publisher": "YashKoladiya30",
   "icon": "media/icon.png",
   "galleryBanner": {
