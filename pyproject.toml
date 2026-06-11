@@ -51,6 +51,7 @@ packages = [
     "bugfixer.backends",
     "bugfixer.backends.cli",
     "bugfixer.backends.api",
+    "bugfixer.providers",
 ]
 
 [tool.setuptools.package-data]

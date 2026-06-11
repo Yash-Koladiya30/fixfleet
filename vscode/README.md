@@ -10,15 +10,15 @@ Premium UI on top of the [FixFleet](https://github.com/Yash-Koladiya30/fixfleet)
 
 ### Welcome — 3-step onboarding
 
-![Welcome screen](media/screenshots/welcome.png)
+![Welcome screen](https://raw.githubusercontent.com/Yash-Koladiya30/fixfleet/main/vscode/media/screenshots/welcome.png)
 
 ### Settings — credentials + project
 
-![Settings credentials](media/screenshots/settings-credentials.png)
+![Settings credentials](https://raw.githubusercontent.com/Yash-Koladiya30/fixfleet/main/vscode/media/screenshots/settings-credentials.png)
 
 ### Settings — AI backend grid + date filter
 
-![Settings backends](media/screenshots/settings-backends.png)
+![Settings backends](https://raw.githubusercontent.com/Yash-Koladiya30/fixfleet/main/vscode/media/screenshots/settings-backends.png)
 
 ---
 
