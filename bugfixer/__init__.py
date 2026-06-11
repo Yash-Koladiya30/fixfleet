@@ -1,6 +1,6 @@
-"""FixFleet — Fleet of AI agents fixing GitLab bugs."""
+"""FixFleet — Fleet of AI agents fixing bugs across any issue tracker."""
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 __name_pretty__ = "FixFleet"
-__tagline__ = "Fleet of AI agents fixing GitLab bugs"
+__tagline__ = "Fleet of AI agents fixing bugs across any tracker"
 __author__ = "Yash Koladiya"
