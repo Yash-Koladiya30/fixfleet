@@ -12,6 +12,9 @@ class ClaudeCLIBackend(Backend):
     DEFAULT_ALLOWED_TOOLS = "Read,Edit,Write,Grep,Glob,Bash"
 
     def run(self, prompt: str, project_dir: str, timeout: int = 600) -> RunResult:
+        if prompt.startswith("-"):
+            # Positional argv token — a leading dash would parse as a flag.
+            prompt = " " + prompt
         cmd = [
             "claude",
             "--print",

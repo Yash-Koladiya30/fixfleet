@@ -1,6 +1,7 @@
 """Shared subprocess runner with stdout tee (live print + capture)."""
 
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -8,6 +9,30 @@ import time
 from typing import List
 
 from .base import RunResult
+
+_IS_POSIX = os.name == "posix"
+
+
+def _kill_tree(proc: subprocess.Popen):
+    """Kill the child and (on POSIX) its whole process group, then reap it.
+
+    Agentic CLIs fork grandchildren (shell tools, git, sandbox workers); killing
+    only the direct child leaves those running and still mutating the repo.
+    """
+    try:
+        if _IS_POSIX:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        else:
+            proc.kill()
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except OSError:
+            pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
 
 
 def run_with_tee(cmd: List[str], cwd: str, timeout: int = 600,
@@ -25,18 +50,25 @@ def run_with_tee(cmd: List[str], cwd: str, timeout: int = 600,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,
             env={**os.environ, **(env or {})},
+            start_new_session=_IS_POSIX,  # own process group so timeout can kill the whole tree
         )
     except FileNotFoundError as e:
         return RunResult(returncode=127, stderr=str(e))
 
     if stdin_data is not None:
-        try:
-            proc.stdin.write(stdin_data)
-            proc.stdin.close()
-        except (BrokenPipeError, OSError):
-            pass
+        # Write on a thread — a large payload can fill the pipe buffer and
+        # deadlock against the child's stdout otherwise.
+        def writer():
+            try:
+                proc.stdin.write(stdin_data)
+                proc.stdin.close()
+            except (BrokenPipeError, OSError):
+                pass
+        threading.Thread(target=writer, daemon=True).start()
 
     def reader(stream, sink_list, dest):
         try:
@@ -61,7 +93,7 @@ def run_with_tee(cmd: List[str], cwd: str, timeout: int = 600,
         if rc is not None:
             break
         if time.time() > deadline:
-            proc.kill()
+            _kill_tree(proc)
             t_out.join(timeout=2)
             t_err.join(timeout=2)
             return RunResult(

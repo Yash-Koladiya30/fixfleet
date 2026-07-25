@@ -85,10 +85,20 @@ class BudgetCheck:
     reason: str = ""
 
 
+def _to_int(value, fallback: int) -> int:
+    """Coerce config values that may have been stored as strings."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
 def check_budget(prompt: str, backend_name: str,
                  session_used: int, daily_used: int,
                  budgets: dict = None) -> BudgetCheck:
     b = {**DEFAULT_BUDGETS, **(budgets or {})}
+    for key, default in DEFAULT_BUDGETS.items():
+        b[key] = _to_int(b.get(key), default)
     estimated = estimate_total_cost(prompt, backend_name)
 
     reasons: list = []

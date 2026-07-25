@@ -92,11 +92,13 @@ class GitHubProvider(Provider):
             "sort": "created",
             "direction": "desc",
         }
-        # GitHub supports `since=ISO` for updated_at filter — we use as best-effort created filter
-        if date_from:
-            params["since"] = f"{date_from}T00:00:00Z"
-        elif date_str:
-            params["since"] = f"{date_str}T00:00:00Z"
+        # GitHub's `since` filters by updated_at, not created_at. Since
+        # updated_at >= created_at, it's a safe server-side pre-filter; the
+        # exact created_at window is enforced client-side below.
+        created_lower = date_from or date_str or ""
+        created_upper = date_to or (date_str if date_str and not date_from else "")
+        if created_lower:
+            params["since"] = f"{created_lower}T00:00:00Z"
 
         results = []
         page = 1
@@ -123,11 +125,16 @@ class GitHubProvider(Provider):
                         code="token_invalid", status=401,
                         message="GitHub token is invalid or expired. Generate a new one with scope `repo` or `public_repo`.",
                     )
-                if e.code == 403:
-                    # Could be rate limit OR scope issue
+                if e.code in (403, 429):
+                    remaining = (e.headers or {}).get("x-ratelimit-remaining", "")
+                    if e.code == 429 or remaining == "0":
+                        raise ProviderError(
+                            code="rate_limited", status=e.code,
+                            message="GitHub rate limit exceeded. Wait a few minutes and retry.",
+                        )
                     raise ProviderAuthError(
                         code="token_forbidden", status=403,
-                        message="GitHub token lacks required scope or rate limit exceeded. Need `repo` scope.",
+                        message="GitHub token lacks required scope. Need `repo` (or `public_repo`).",
                     )
                 if e.code == 404:
                     raise ProviderNotFoundError(
@@ -148,18 +155,22 @@ class GitHubProvider(Provider):
                 break
 
             # Filter out pull requests (GitHub's /issues endpoint returns both)
+            # and enforce the created_at window client-side.
+            below_lower = False
             for raw_issue in batch:
                 if raw_issue.get("pull_request"):
                     continue
-                # Optional client-side date_to filter (GitHub only supports `since`)
-                if date_to:
-                    created = raw_issue.get("created_at", "")[:10]
-                    if created > date_to:
-                        continue
+                created = raw_issue.get("created_at", "")[:10]
+                if created_upper and created > created_upper:
+                    continue
+                if created_lower and created < created_lower:
+                    # Sorted by created desc — everything after this is older.
+                    below_lower = True
+                    break
                 results.append(self._normalize(raw_issue, host, project_id))
 
             # Pagination via Link header
-            if 'rel="next"' not in link_header:
+            if below_lower or 'rel="next"' not in link_header:
                 break
             page += 1
 

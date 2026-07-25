@@ -252,12 +252,27 @@ def cmd_fix_issue(args):
     loc = locate(parsed, project_dir)
     prompt = build_prompt(parsed, locator=loc)
 
-    # Budget check
+    # Budget check — enforced unless --force is passed.
+    cfg_budgets = (config.load().get("budgets") or {})
     daily_used = state.get_daily_usage(backend.name)
     check = budget.check_budget(
         prompt, backend.name,
         session_used=0, daily_used=daily_used,
+        budgets=cfg_budgets,
     )
+    if not check.allowed and not getattr(args, "force", False):
+        _emit({
+            "ok": False,
+            "code": "budget_exceeded",
+            "error": f"Budget would be exceeded: {check.reason}. Pass --force to run anyway.",
+            "budget": {
+                "estimated": check.estimated,
+                "per_issue_max": check.per_issue_max,
+                "daily_used": check.daily_used,
+                "daily_max": check.daily_max,
+            },
+        })
+        sys.exit(1)
 
     # Run backend
     result: RunResult = backend.run(prompt, project_dir)
@@ -341,12 +356,18 @@ def cmd_config_set(args):
         if "=" not in pair:
             _err(f"invalid --config-set entry: {pair}")
         key, value = pair.split("=", 1)
+        # Coerce to native JSON types (int, float, bool, null) so numeric
+        # settings like budgets don't get stored as strings.
+        try:
+            parsed_value = json.loads(value)
+        except (json.JSONDecodeError, ValueError):
+            parsed_value = value
         # Support nested keys via dot notation: api.base_url=...
         parts = key.split(".")
         target = cfg
         for p in parts[:-1]:
             target = target.setdefault(p, {})
-        target[parts[-1]] = value
+        target[parts[-1]] = parsed_value
 
     config.save(cfg)
     _emit({"ok": True, "saved": list(args.config_set)})
@@ -376,9 +397,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--token", help="Issue-tracker token (or set BUGFIXER_TOKEN env var)")
     p.add_argument("--project-url", help="Project URL or ID")
     p.add_argument("--project-dir", help="Local project directory")
-    p.add_argument("--provider", default="gitlab",
-                   help="Issue-tracker provider: gitlab (default), github, jira, linear")
+    p.add_argument("--provider", default=None,
+                   help="Issue-tracker provider: gitlab, github, jira, linear, bitbucket, azure "
+                        "(default: auto-detect from --project-url, falling back to gitlab)")
     p.add_argument("--backend", help="AI backend name: claude, codex, gemini, cursor, aider, qwen, openai_compat")
+    p.add_argument("--force", action="store_true",
+                   help="Run --fix-issue even when the token budget would be exceeded")
     p.add_argument("--date", help="Filter bugs created on YYYY-MM-DD (single day)")
     p.add_argument("--date-from", dest="date_from", help="Filter bugs created on/after YYYY-MM-DD")
     p.add_argument("--date-to", dest="date_to", help="Filter bugs created on/before YYYY-MM-DD")

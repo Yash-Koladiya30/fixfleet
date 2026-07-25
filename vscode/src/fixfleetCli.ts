@@ -153,9 +153,17 @@ function augmentedPath(): string {
 /** Resolve the actual fixfleet binary path, scanning PATH + common user-bin dirs. */
 function resolveCli(): string | null {
     const cfg = vscode.workspace.getConfiguration('fixfleet');
-    const cliPath = cfg.get<string>('cliPath') || 'fixfleet';
+    let cliPath = cfg.get<string>('cliPath') || 'fixfleet';
 
-    if (cliPath.includes('/') && fs.existsSync(cliPath)) return cliPath;
+    // Expand a leading ~ (shells do this, child_process.spawn does not).
+    if (cliPath === '~' || cliPath.startsWith('~/')) {
+        cliPath = path.join(os.homedir(), cliPath.slice(1));
+    }
+
+    // A path containing '/' is an explicit location — never join it onto PATH dirs.
+    if (cliPath.includes('/')) {
+        return fs.existsSync(cliPath) ? cliPath : null;
+    }
 
     for (const dir of augmentedPath().split(':')) {
         const candidate = path.join(dir, cliPath);
@@ -172,8 +180,18 @@ function resolveCli(): string | null {
  * Run fixfleet with JSON args. Try direct binary first, then `python -m bugfixer.json_api`.
  * Strips ANSI noise from stdout, returns last JSON line.
  */
-async function runJson(args: string[], timeoutMs = 120_000): Promise<any> {
-    const argsForLog = args.map(a => (a.startsWith('glpat-') ? 'glpat-***REDACTED***' : a)).join(' ');
+const TOKEN_PREFIXES = ['glpat-', 'ghp_', 'github_pat_', 'lin_api_'];
+
+async function runJson(args: string[], timeoutMs = 120_000, extraEnv: Record<string, string> = {}): Promise<any> {
+    // Redact the value following a --token flag (position-based) plus any arg
+    // that looks like a well-known token format. Env vars are never logged.
+    const argsForLog = args
+        .map((a, i) => {
+            if (i > 0 && args[i - 1] === '--token') return '***REDACTED***';
+            if (TOKEN_PREFIXES.some(p => a.startsWith(p))) return '***REDACTED***';
+            return a;
+        })
+        .join(' ');
 
     const tryRun = (cmd: string, fullArgs: string[]) =>
         new Promise<any>((resolve, reject) => {
@@ -186,6 +204,7 @@ async function runJson(args: string[], timeoutMs = 120_000): Promise<any> {
                         NO_COLOR: '1',
                         PYTHONUNBUFFERED: '1',
                         PATH: augmentedPath(),
+                        ...extraEnv,
                     },
                 });
             } catch (err) {
@@ -303,13 +322,15 @@ export async function listBugs(opts: {
     dateFrom?: string;
     dateTo?: string;
 }): Promise<{ host: string; project_id: string; issues: BugIssue[] }> {
-    const args = ['--list-bugs-json', '--token', opts.token, '--project-url', opts.projectUrl];
+    // Token is passed via the BUGFIXER_TOKEN env var (the CLI reads it when
+    // --token is absent) — never as an argv, which would leak via `ps aux`/logs.
+    const args = ['--list-bugs-json', '--project-url', opts.projectUrl];
     if (opts.provider) args.push('--provider', opts.provider);
     if (opts.dateFrom) args.push('--date-from', opts.dateFrom);
     if (opts.dateTo) args.push('--date-to', opts.dateTo);
     if (opts.date && !opts.dateFrom && !opts.dateTo) args.push('--date', opts.date);
 
-    const res = await runJson(args, 20_000);
+    const res = await runJson(args, 20_000, { BUGFIXER_TOKEN: opts.token });
     return unwrap(res);
 }
 
@@ -321,13 +342,13 @@ export async function fixBug(opts: {
     projectDir: string;
     provider?: string;
 }): Promise<FixResult> {
+    // Token via BUGFIXER_TOKEN env var, never argv (see listBugs).
     const args = [
         '--fix-issue', String(opts.issueIid),
         '--backend', opts.backend,
-        '--token', opts.token,
         '--project-url', opts.projectUrl,
         '--project-dir', opts.projectDir,
     ];
     if (opts.provider) args.push('--provider', opts.provider);
-    return runJson(args, 900_000);
+    return runJson(args, 900_000, { BUGFIXER_TOKEN: opts.token });
 }

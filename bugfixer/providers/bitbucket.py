@@ -11,6 +11,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta
 from typing import Optional
 
 from .base import (
@@ -26,6 +27,15 @@ DEFAULT_HOST = "bitbucket.org"
 API_HOST = "api.bitbucket.org"
 PER_PAGE = 50
 MAX_PAGES = 20
+
+
+def _next_day(date_str: str) -> str:
+    """YYYY-MM-DD → next day, for exclusive upper bounds."""
+    try:
+        d = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        return date_str
+    return (d + timedelta(days=1)).strftime("%Y-%m-%d")
 
 
 class BitbucketProvider(Provider):
@@ -81,14 +91,19 @@ class BitbucketProvider(Provider):
         auth = base64.b64encode(token.encode()).decode()
         base_url = f"https://{API_HOST}/2.0/repositories/{project_id}/issues"
 
-        # Build BBQL query
-        query_parts = ['kind="bug"', 'state="open"']
+        # Build BBQL query. Bitbucket creates issues in state "new" — include it,
+        # or freshly reported bugs never show up.
+        query_parts = ['kind="bug"', '(state="new" OR state="open" OR state="on hold")']
         if date_from:
             query_parts.append(f'created_on >= {date_from}T00:00:00Z')
+            if date_to:
+                query_parts.append(f'created_on < {_next_day(date_to)}T00:00:00Z')
         elif date_str:
+            # Single-day window, matching GitLab's --date semantics.
             query_parts.append(f'created_on >= {date_str}T00:00:00Z')
-        if date_to:
-            query_parts.append(f'created_on <= {date_to}T23:59:59Z')
+            query_parts.append(f'created_on < {_next_day(date_str)}T00:00:00Z')
+        elif date_to:
+            query_parts.append(f'created_on < {_next_day(date_to)}T00:00:00Z')
 
         params = {
             "q": " AND ".join(query_parts),

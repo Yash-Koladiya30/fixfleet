@@ -30,7 +30,7 @@ from bugfixer.providers import (
 class FakeResponse:
     """Mimics urllib's addinfourl response object."""
 
-    def __init__(self, body: dict | list, headers: dict = None):
+    def __init__(self, body, headers: dict = None):
         self._body = json.dumps(body).encode()
         self.headers = _HeadersDict(headers or {})
 
@@ -199,6 +199,19 @@ class TestBitbucketQA(unittest.TestCase):
             with self.assertRaises(ProviderAuthError):
                 self.p.fetch_bugs("u:bad", "team/repo")
 
+    def test_query_includes_new_state(self):
+        """Bitbucket creates issues in state 'new' — the filter must include it."""
+        captured = {}
+        def capture(req, timeout=0):
+            captured["url"] = req.full_url
+            return FakeResponse({"values": [], "next": None})
+        with patch("urllib.request.urlopen", side_effect=capture):
+            self.p.fetch_bugs("u:p", "team/repo")
+        from urllib.parse import unquote_plus
+        q = unquote_plus(captured["url"])
+        self.assertIn('state="new"', q)
+        self.assertIn('state="open"', q)
+
 
 # ══════════════════════════════════════════════════════════════
 # Linear
@@ -353,11 +366,14 @@ class TestJiraQA(unittest.TestCase):
             self.p.fetch_bugs("me@x.com:tok", "MYPROJ", host="acme.atlassian.net",
                               date_from="2026-06-01", date_to="2026-06-04")
         from urllib.parse import unquote_plus
+        # New cursor-paginated endpoint (old /rest/api/3/search returns 410)
+        self.assertIn("/rest/api/3/search/jql", captured["url"])
         jql = unquote_plus(captured["url"].split("jql=")[1].split("&")[0])
         self.assertIn('project = "MYPROJ"', jql)
         self.assertIn('issuetype = "Bug"', jql)
         self.assertIn('created >= "2026-06-01"', jql)
-        self.assertIn('created <= "2026-06-04"', jql)
+        # date_to is inclusive — bounded by an exclusive next-day upper bound
+        self.assertIn('created < "2026-06-05"', jql)
 
     def test_401(self):
         with patch("urllib.request.urlopen", side_effect=http_error(401)):
@@ -572,6 +588,49 @@ class TestJsonApiWithProviders(unittest.TestCase):
             [FakeResponse([GITHUB_ISSUE])],
         )
         self.assertTrue(result.get("ok"))
+
+
+class TestProviderDetection(unittest.TestCase):
+    """URL → provider routing must match on host, never on path substrings."""
+
+    def test_github_url_with_gitlab_in_path(self):
+        from bugfixer.providers import detect_provider_from_url
+        p = detect_provider_from_url("https://github.com/acme/gitlab.integration")
+        self.assertIsNotNone(p)
+        self.assertEqual(p.key, "github")
+
+    def test_self_hosted_gitlab(self):
+        from bugfixer.providers import detect_provider_from_url
+        p = detect_provider_from_url("https://gitlab.mycompany.com/grp/proj")
+        self.assertIsNotNone(p)
+        self.assertEqual(p.key, "gitlab")
+
+    def test_ssh_github(self):
+        from bugfixer.providers import detect_provider_from_url
+        p = detect_provider_from_url("git@github.com:owner/repo.git")
+        self.assertIsNotNone(p)
+        self.assertEqual(p.key, "github")
+
+    def test_jira_cloud(self):
+        from bugfixer.providers import detect_provider_from_url
+        p = detect_provider_from_url("https://acme.atlassian.net/browse/MYPROJ-42")
+        self.assertIsNotNone(p)
+        self.assertEqual(p.key, "jira")
+
+
+class TestBudgetCoercion(unittest.TestCase):
+    """Budgets stored as strings (legacy --config-set) must not crash."""
+
+    def test_string_budgets_coerced(self):
+        from bugfixer.budget import check_budget
+        check = check_budget(
+            "x" * 1000, "claude", session_used=0, daily_used=0,
+            budgets={"per_issue_max_tokens": "50000",
+                     "session_max_tokens": "200000",
+                     "daily_max_tokens": "500000"},
+        )
+        self.assertTrue(check.allowed)
+        self.assertEqual(check.per_issue_max, 50000)
 
 
 if __name__ == "__main__":

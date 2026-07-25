@@ -10,6 +10,9 @@ class CodexCLIBackend(Backend):
     requires_binary = "codex"
 
     def run(self, prompt: str, project_dir: str, timeout: int = 600) -> RunResult:
+        if prompt.startswith("-"):
+            # Positional argv token — a leading dash would parse as a flag.
+            prompt = " " + prompt
         # `codex exec` is the non-interactive mode; --full-auto auto-approves edits within sandbox.
         cmd = [
             "codex",

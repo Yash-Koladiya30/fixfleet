@@ -47,6 +47,12 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
             localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')],
         };
         view.webview.onDidReceiveMessage(msg => this.handleMessage(msg));
+        // When the view is disposed (sidebar closed/collapsed), drop our
+        // reference so later refresh()/render() calls become no-ops instead of
+        // writing to a disposed webview (unhandled rejection).
+        view.onDidDispose(() => {
+            if (this.view === view) this.view = undefined;
+        });
         this.refresh();
     }
 
@@ -622,10 +628,13 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
     private renderQueueBar(): string {
         const q = this.queueState;
         const pct = q.total ? Math.round((q.done / q.total) * 100) : 0;
+        // Show the 1-based index of the bug currently being fixed, clamped so
+        // the render after the final completion never shows total+1/total.
+        const current = Math.min(q.done + 1, q.total);
         return `
             <div class="queue-bar">
                 <div class="queue-text">
-                    🚀 Fixing ${q.done + 1}/${q.total}…
+                    🚀 Fixing ${current}/${q.total}…
                     ${q.currentIid ? `<span class="queue-current">#${q.currentIid}</span>` : ''}
                 </div>
                 <div class="queue-progress"><div class="queue-fill" style="width:${pct}%"></div></div>

@@ -10,11 +10,11 @@ No agentic tool-use loop — keeps token usage minimal.
 
 import json
 import re
+import socket
 import subprocess
 import sys
 import urllib.error
 import urllib.request
-from pathlib import Path
 
 from ..base import Backend, RunResult
 
@@ -66,15 +66,12 @@ class OpenAICompatBackend(Backend):
             "max_tokens": self.max_output_tokens,
         }
         data = json.dumps(body).encode()
-        req = urllib.request.Request(
-            url,
-            data=data,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}" if self.api_key else "",
-            },
-            method="POST",
-        )
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            # Omit the header entirely when no key (Ollama/LM Studio) — some
+            # strict gateways reject an empty Authorization value.
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
 
@@ -90,13 +87,19 @@ class OpenAICompatBackend(Backend):
             err_body = e.read().decode(errors="ignore")
             return RunResult(returncode=e.code, stderr=f"HTTP {e.code}: {err_body[:500]}")
         except urllib.error.URLError as e:
+            if isinstance(getattr(e, "reason", None), socket.timeout):
+                return RunResult(returncode=2, stderr=f"Request timed out after {timeout}s", timed_out=True)
             return RunResult(returncode=2, stderr=f"Network error: {e.reason}")
+        except socket.timeout:
+            return RunResult(returncode=2, stderr=f"Request timed out after {timeout}s", timed_out=True)
         except Exception as e:
             return RunResult(returncode=3, stderr=f"Unexpected error: {e}")
 
         try:
             content = response["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError):
+        except (KeyError, IndexError, TypeError):
+            # TypeError covers "choices": null — some proxies return error
+            # payloads with HTTP 200.
             return RunResult(returncode=4, stderr=f"Bad response shape: {json.dumps(response)[:500]}")
 
         # Echo to user so they can read the model's reasoning live.
@@ -138,18 +141,22 @@ def _extract_diff(text: str) -> str:
     """Pull the first fenced diff block out of the model output."""
     matches = DIFF_FENCE_RE.findall(text)
     for m in matches:
-        if "---" in m and "+++" in m and "@@" in m:
+        if ("---" in m and "+++" in m and "@@" in m) or m.lstrip().startswith("diff --git"):
             return m.strip() + "\n"
     # Fallback: maybe model emitted raw diff without fences
-    if text.lstrip().startswith("---") and "+++" in text:
+    stripped = text.lstrip()
+    if stripped.startswith("diff --git") or (stripped.startswith("---") and "+++" in text):
         return text.strip() + "\n"
     return ""
 
 
 def _apply_diff(diff_text: str, project_dir: str) -> tuple:
-    """Try `git apply`, fall back to `patch -p1`. Return (rc, message)."""
-    project = Path(project_dir)
+    """Try `git apply`, fall back to `patch -p1`. Return (rc, message).
 
+    Both paths are atomic: git apply is all-or-nothing by design, and the
+    patch fallback dry-runs first so a failing hunk never leaves the repo
+    half-patched.
+    """
     # Use stdin to feed the diff
     try:
         result = subprocess.run(
@@ -166,8 +173,18 @@ def _apply_diff(diff_text: str, project_dir: str) -> tuple:
     except (FileNotFoundError, subprocess.TimeoutExpired) as e:
         git_err = str(e)
 
-    # Try patch as fallback
+    # Try patch as fallback — dry-run first to keep it all-or-nothing.
     try:
+        dry = subprocess.run(
+            ["patch", "-p1", "--forward", "--dry-run"],
+            input=diff_text,
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if dry.returncode != 0:
+            return dry.returncode, f"git apply: {git_err}; patch (dry-run): {dry.stderr or dry.stdout}"
         result = subprocess.run(
             ["patch", "-p1", "--forward"],
             input=diff_text,

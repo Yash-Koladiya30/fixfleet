@@ -37,7 +37,7 @@ query Issues($teamKey: String!, $cursor: String, $first: Int!, $createdAfter: Da
       first: $first,
       after: $cursor,
       filter: {
-        state: { type: { in: ["unstarted", "started", "backlog"] } },
+        state: { type: { in: ["triage", "unstarted", "started", "backlog"] } },
         labels: { name: { eqIgnoreCase: "Bug" } },
         createdAt: { gte: $createdAfter, lte: $createdBefore }
       }
@@ -121,11 +121,16 @@ class LinearProvider(Provider):
     ) -> list:
         # Resolve team UUID from team key (Linear's id can be UUID or key in newer API).
         # We pass the key; Linear accepts both.
-        date_after = (
-            f"{date_from}T00:00:00Z" if date_from
-            else (f"{date_str}T00:00:00Z" if date_str else None)
-        )
-        date_before = f"{date_to}T23:59:59Z" if date_to else None
+        if date_from:
+            date_after = f"{date_from}T00:00:00Z"
+            date_before = f"{date_to}T23:59:59Z" if date_to else None
+        elif date_str:
+            # Single-day window, matching GitLab's --date semantics.
+            date_after = f"{date_str}T00:00:00Z"
+            date_before = f"{date_str}T23:59:59Z"
+        else:
+            date_after = None
+            date_before = f"{date_to}T23:59:59Z" if date_to else None
 
         results = []
         cursor = None

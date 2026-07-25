@@ -79,11 +79,26 @@ class Provider(ABC):
 
     @classmethod
     def matches_url(cls, url: str) -> bool:
-        """Heuristic: does this provider own this URL?"""
+        """Heuristic: does this provider own this URL? Matches host part only,
+        so a repo path like github.com/acme/gitlab.integration can't misroute."""
         if not url:
             return False
-        lower = url.lower()
-        return any(p in lower for p in cls.host_patterns)
+        lower = url.lower().strip()
+        # Extract host from URL / ssh / scheme-less forms
+        host = lower
+        if "://" in host:
+            host = host.split("://", 1)[1]
+        if host.startswith("git@"):
+            host = host[4:].split(":", 1)[0]
+        host = host.split("/", 1)[0].split("@")[-1].split(":", 1)[0]
+        for p in cls.host_patterns:
+            if p.endswith("."):
+                # Prefix pattern, e.g. "gitlab." matches gitlab.com / gitlab.example.com
+                if host.startswith(p):
+                    return True
+            elif host == p or host.endswith("." + p):
+                return True
+        return False
 
     @abstractmethod
     def parse_url(self, raw: str) -> tuple:

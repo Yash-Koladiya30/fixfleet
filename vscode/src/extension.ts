@@ -14,8 +14,6 @@ export const output = vscode.window.createOutputChannel('FixFleet');
 export function activate(context: vscode.ExtensionContext) {
     const version = context.extension.packageJSON.version;
     output.appendLine(`━━━ FixFleet v${version} activated at ${new Date().toISOString()} ━━━`);
-    output.show(true);
-    vscode.window.showInformationMessage(`FixFleet v${version} loaded ✓`);
 
     // ── Register commands FIRST (before any async ops) ─────────
     // This guarantees the sidebar buttons work even during slow CLI checks.
@@ -62,8 +60,14 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('fixfleet.installCli', () => {
             const terminal = vscode.window.createTerminal('Install FixFleet CLI');
             terminal.show();
+            // Only append the PATH export to ~/.zshrc if it isn't already there
+            // (grep -F fixed-string check), so repeated installs don't duplicate it.
             terminal.sendText(
-                "pip3 install --user fixfleet && echo 'export PATH=\"$(python3 -m site --user-base)/bin:$PATH\"' >> ~/.zshrc && source ~/.zshrc && fixfleet --version",
+                "pip3 install --user fixfleet" +
+                " && FF_LINE='export PATH=\"$(python3 -m site --user-base)/bin:$PATH\"'" +
+                ' && if ! grep -qsF "$FF_LINE" ~/.zshrc; then echo "$FF_LINE" >> ~/.zshrc; fi' +
+                ' && export PATH="$(python3 -m site --user-base)/bin:$PATH"' +
+                " && fixfleet --version",
             );
             vscode.window.showInformationMessage('Installing FixFleet CLI in terminal…');
         }),

@@ -1,6 +1,8 @@
 """Jira provider — Atlassian Cloud REST API v3 + JQL.
 
-Endpoint: https://{your-domain}.atlassian.net/rest/api/3/search
+Endpoint: https://{your-domain}.atlassian.net/rest/api/3/search/jql
+(the old /rest/api/3/search was removed by Atlassian in 2025 and returns 410;
+the replacement paginates with a nextPageToken cursor instead of startAt/total)
 Auth: Basic (email:api-token, base64-encoded)
 
 User must paste token as: 'email@example.com:atlassian-api-token'
@@ -11,6 +13,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta
 from typing import Optional
 
 from .base import (
@@ -24,6 +27,15 @@ from .base import (
 
 PER_PAGE = 50
 MAX_PAGES = 20
+
+
+def _next_day(date_str: str) -> str:
+    """YYYY-MM-DD → next day, for exclusive upper bounds in JQL."""
+    try:
+        d = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        return date_str
+    return (d + timedelta(days=1)).strftime("%Y-%m-%d")
 
 
 class JiraProvider(Provider):
@@ -93,28 +105,35 @@ class JiraProvider(Provider):
             )
 
         auth = base64.b64encode(token.encode()).decode()
-        base_url = f"https://{host}/rest/api/3/search"
+        base_url = f"https://{host}/rest/api/3/search/jql"
 
-        # Build JQL
-        jql_parts = [f'project = "{project_id}"', 'issuetype = "Bug"', 'statusCategory != Done']
+        # Build JQL. Escape quotes/backslashes — project_id can come from stored config.
+        proj = project_id.replace("\\", "\\\\").replace('"', '\\"')
+        jql_parts = [f'project = "{proj}"', 'issuetype = "Bug"', 'statusCategory != Done']
         if date_from:
             jql_parts.append(f'created >= "{date_from}"')
+            if date_to:
+                # Jira parses a bare date as 00:00 — bound with next day to include date_to fully.
+                jql_parts.append(f'created < "{_next_day(date_to)}"')
         elif date_str:
+            # Single-day window, matching GitLab's --date semantics.
             jql_parts.append(f'created >= "{date_str}"')
-        if date_to:
-            jql_parts.append(f'created <= "{date_to}"')
+            jql_parts.append(f'created < "{_next_day(date_str)}"')
+        elif date_to:
+            jql_parts.append(f'created < "{_next_day(date_to)}"')
         jql = " AND ".join(jql_parts) + " ORDER BY created DESC"
 
         results = []
-        start_at = 0
+        next_page_token = ""
         page = 0
         while page < MAX_PAGES:
             params = {
                 "jql": jql,
-                "startAt": str(start_at),
                 "maxResults": str(PER_PAGE),
                 "fields": "summary,description,labels,priority,created,updated,creator,reporter,issuetype,status",
             }
+            if next_page_token:
+                params["nextPageToken"] = next_page_token
             url = f"{base_url}?{urllib.parse.urlencode(params)}"
             req = urllib.request.Request(
                 url,
@@ -154,13 +173,12 @@ class JiraProvider(Provider):
                     message=f"Couldn't reach https://{host} — {e.reason}",
                 )
 
-            issues_batch = data.get("issues", [])
+            issues_batch = data.get("issues") or []
             for raw_issue in issues_batch:
                 results.append(self._normalize(raw_issue, host, project_id))
 
-            total = data.get("total", 0)
-            start_at += len(issues_batch)
-            if start_at >= total or not issues_batch:
+            next_page_token = data.get("nextPageToken") or ""
+            if not next_page_token or not issues_batch:
                 break
             page += 1
 

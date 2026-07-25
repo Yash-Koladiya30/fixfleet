@@ -70,8 +70,18 @@ class GitLabProvider(Provider):
 
         # Plain path
         if "/" in s and not s.startswith(("/", ".", "~")):
-            if s.startswith("gitlab.com/"):
-                return DEFAULT_HOST, s[len("gitlab.com/"):].rstrip("/")
+            # Scheme-less URL with a host prefix, e.g. gitlab.example.com/grp/proj
+            first = s.split("/", 1)[0]
+            if "." in first and not first.isdigit():
+                host = first
+                path = s.split("/", 1)[1].rstrip("/")
+                if path.endswith(".git"):
+                    path = path[:-4]
+                if "/-/" in path:
+                    path = path.split("/-/")[0]
+                if not path:
+                    raise ValueError(f"could not parse URL: {raw}")
+                return host, path
             return DEFAULT_HOST, s.rstrip("/")
 
         raise ValueError(f"unrecognized project reference: {raw}")
@@ -110,6 +120,18 @@ class GitLabProvider(Provider):
             params["created_after"] = f"{date_str}T00:00:00Z"
             params["created_before"] = f"{end_date}T00:00:00Z"
 
+        all_issues = self._fetch_pages(token, base_url, params, host, project_id)
+
+        # GitLab label matching is exact/case-sensitive. If "Bug" found nothing,
+        # retry with lowercase "bug" so projects using that convention still work.
+        if not all_issues:
+            params = {**params, "labels": "bug"}
+            all_issues = self._fetch_pages(token, base_url, params, host, project_id)
+
+        return all_issues
+
+    def _fetch_pages(self, token: str, base_url: str, params: dict,
+                     host: str, project_id: str) -> list:
         all_issues = []
         page = 1
         while page <= MAX_PAGES:

@@ -12,6 +12,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta
 from typing import Optional
 
 from .base import (
@@ -26,6 +27,15 @@ from .base import (
 API_VERSION = "7.0"
 API_HOST = "dev.azure.com"
 MAX_IDS_PER_REQUEST = 200
+
+
+def _next_day(date_str: str) -> str:
+    """YYYY-MM-DD → next day, for exclusive upper bounds."""
+    try:
+        d = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        return date_str
+    return (d + timedelta(days=1)).strftime("%Y-%m-%d")
 
 
 class AzureDevOpsProvider(Provider):
@@ -103,14 +113,21 @@ class AzureDevOpsProvider(Provider):
         ]
         if date_from:
             wiql_parts.append(f"  AND [System.CreatedDate] >= '{date_from}T00:00:00Z'")
+            if date_to:
+                wiql_parts.append(f"  AND [System.CreatedDate] < '{_next_day(date_to)}T00:00:00Z'")
         elif date_str:
+            # Single-day window, matching GitLab's --date semantics.
             wiql_parts.append(f"  AND [System.CreatedDate] >= '{date_str}T00:00:00Z'")
-        if date_to:
-            wiql_parts.append(f"  AND [System.CreatedDate] <= '{date_to}T23:59:59Z'")
+            wiql_parts.append(f"  AND [System.CreatedDate] < '{_next_day(date_str)}T00:00:00Z'")
+        elif date_to:
+            wiql_parts.append(f"  AND [System.CreatedDate] < '{_next_day(date_to)}T00:00:00Z'")
         wiql_parts.append("ORDER BY [System.CreatedDate] DESC")
         wiql = " ".join(wiql_parts)
 
-        wiql_url = f"https://{host}/{org}/{project}/_apis/wit/wiql?api-version={API_VERSION}"
+        # Re-encode path segments — project names commonly contain spaces.
+        org_q = urllib.parse.quote(org, safe="")
+        project_q = urllib.parse.quote(project, safe="")
+        wiql_url = f"https://{host}/{org_q}/{project_q}/_apis/wit/wiql?api-version={API_VERSION}"
         wiql_req = urllib.request.Request(
             wiql_url,
             data=json.dumps({"query": wiql}).encode(),
@@ -156,7 +173,7 @@ class AzureDevOpsProvider(Provider):
             chunk = ids[i:i + MAX_IDS_PER_REQUEST]
             ids_str = ",".join(str(x) for x in chunk)
             details_url = (
-                f"https://{host}/{org}/_apis/wit/workitems"
+                f"https://{host}/{org_q}/_apis/wit/workitems"
                 f"?ids={ids_str}&$expand=none&api-version={API_VERSION}"
             )
             req = urllib.request.Request(details_url, headers=headers)
@@ -164,8 +181,20 @@ class AzureDevOpsProvider(Provider):
                 with urllib.request.urlopen(req, timeout=30) as resp:
                     details = json.loads(resp.read().decode())
             except urllib.error.HTTPError as e:
-                # Skip chunk on error — partial results better than none
-                continue
+                if e.code in (401, 403):
+                    raise ProviderAuthError(
+                        code="token_invalid", status=e.code,
+                        message="Azure DevOps PAT rejected while fetching work item details.",
+                    )
+                raise ProviderError(
+                    code=f"http_{e.code}", status=e.code,
+                    message=f"Azure DevOps work-item fetch returned {e.code} {e.reason}",
+                )
+            except urllib.error.URLError as e:
+                raise ProviderNetworkError(
+                    code="network_error",
+                    message=f"Couldn't reach https://{host} — {e.reason}",
+                )
             for wi in details.get("value", []):
                 results.append(self._normalize(wi, host, org, project))
 
@@ -197,11 +226,13 @@ class AzureDevOpsProvider(Provider):
             tags.append(priority_label)
 
         created_by = fields.get("System.CreatedBy") or {}
-        author_name = (
-            created_by.get("displayName")
-            or created_by.get("uniqueName")
-            or (created_by if isinstance(created_by, str) else "")
-        )
+        if isinstance(created_by, str):
+            # Older api-versions return a plain "Name <email>" string.
+            author_name = created_by
+        elif isinstance(created_by, dict):
+            author_name = created_by.get("displayName") or created_by.get("uniqueName") or ""
+        else:
+            author_name = ""
 
         return {
             "iid": wi_id,

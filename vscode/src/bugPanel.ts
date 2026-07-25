@@ -67,6 +67,7 @@ export class BugPanel {
         const projectUrl = cfg.get<string>('projectUrl') || '';
         let projectDir = cfg.get<string>('projectDir') || '';
         const backend = cfg.get<string>('backend') || 'claude';
+        const provider = cfg.get<string>('provider') || 'gitlab';
 
         if (!projectDir) {
             projectDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
@@ -95,6 +96,7 @@ export class BugPanel {
                         token,
                         projectUrl,
                         projectDir,
+                        provider,
                     });
                     this.panel.webview.postMessage({ cmd: 'fixDone', result });
                     if (result.success) {
@@ -396,6 +398,7 @@ export class BugPanel {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>${styles}</style>
 </head>
@@ -417,7 +420,7 @@ export class BugPanel {
 
         <div class="actions">
             <button class="btn btn-primary" id="fix-btn">✨ Fix This Bug with AI</button>
-            <button class="btn btn-secondary" id="open-gitlab">🔗 Open in GitLab</button>
+            <button class="btn btn-secondary" id="open-gitlab">🔗 Open in Browser</button>
             <button class="btn btn-secondary" id="open-settings">⚙️ Settings</button>
         </div>
     </header>
@@ -453,29 +456,43 @@ export class BugPanel {
         vscode.postMessage({ cmd: 'openSettings' });
     });
 
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function num(v) {
+        return typeof v === 'number' && isFinite(v) ? v : 0;
+    }
+
     function setStatus(html, cls) {
         status.innerHTML = html;
         status.className = 'visible ' + (cls || '');
     }
 
     function renderConfidence(c) {
-        const pct = Math.round(c.final_score * 100);
-        const bar = c.final_score >= 0.7 ? 'conf-bar-high'
-                  : c.final_score >= 0.45 ? 'conf-bar-med'
+        c = c || {};
+        const score = num(c.final_score);
+        const pct = Math.round(score * 100);
+        const bar = score >= 0.7 ? 'conf-bar-high'
+                  : score >= 0.45 ? 'conf-bar-med'
                   : 'conf-bar-low';
         return \`
             <div class="confidence">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <strong>Confidence:</strong>
-                    <span style="font-weight:600;">\${c.label} — \${pct}%</span>
+                    <span style="font-weight:600;">\${esc(c.label || 'n/a')} — \${pct}%</span>
                 </div>
                 <div class="conf-bar"><div class="\${bar}" style="width:\${pct}%"></div></div>
-                <div class="conf-row"><span class="conf-key">Root cause</span><span class="conf-val">\${(c.root_cause || '—').slice(0, 80)}</span></div>
-                <div class="conf-row"><span class="conf-key">Self-rating</span><span class="conf-val">\${c.self_rating}/10</span></div>
-                <div class="conf-row"><span class="conf-key">Diff focus</span><span class="conf-val">\${c.diff_focus.toFixed(2)}</span></div>
-                <div class="conf-row"><span class="conf-key">File relevance</span><span class="conf-val">\${c.file_relevance.toFixed(2)}</span></div>
-                <div class="conf-row"><span class="conf-key">Files changed</span><span class="conf-val">\${c.files_changed.length} (\${c.lines_changed} lines)</span></div>
-                <div class="conf-row"><span class="conf-key">Tests run</span><span class="conf-val">\${c.tests_run}</span></div>
+                <div class="conf-row"><span class="conf-key">Root cause</span><span class="conf-val">\${esc((c.root_cause || '—').slice(0, 80))}</span></div>
+                <div class="conf-row"><span class="conf-key">Self-rating</span><span class="conf-val">\${num(c.self_rating)}/10</span></div>
+                <div class="conf-row"><span class="conf-key">Diff focus</span><span class="conf-val">\${num(c.diff_focus).toFixed(2)}</span></div>
+                <div class="conf-row"><span class="conf-key">File relevance</span><span class="conf-val">\${num(c.file_relevance).toFixed(2)}</span></div>
+                <div class="conf-row"><span class="conf-key">Files changed</span><span class="conf-val">\${(c.files_changed || []).length} (\${num(c.lines_changed)} lines)</span></div>
+                <div class="conf-row"><span class="conf-key">Tests run</span><span class="conf-val">\${esc(c.tests_run || 'n/a')}</span></div>
             </div>
         \`;
     }
@@ -483,18 +500,18 @@ export class BugPanel {
     window.addEventListener('message', event => {
         const m = event.data;
         if (m.cmd === 'fixing') {
-            setStatus(\`<span class="pulse"></span> <strong>Fixing with \${m.backend}...</strong>  AI agent is reading code, finding the bug, and applying the fix. This may take 30s–5min.\`, 'fixing');
+            setStatus(\`<span class="pulse"></span> <strong>Fixing with \${esc(m.backend)}...</strong>  AI agent is reading code, finding the bug, and applying the fix. This may take 30s–5min.\`, 'fixing');
         } else if (m.cmd === 'fixDone') {
             fixBtn.disabled = false;
-            const r = m.result;
+            const r = m.result || {};
             if (r.success) {
-                setStatus('<strong>✓ Fix applied</strong>' + renderConfidence(r.confidence), 'success');
+                setStatus('<strong>✓ Fix applied</strong>' + (r.confidence ? renderConfidence(r.confidence) : ''), 'success');
             } else {
-                setStatus(\`<strong>⚠ Fix uncertain</strong> — \${r.error || 'review confidence below'}\` + (r.confidence ? renderConfidence(r.confidence) : ''), 'error');
+                setStatus(\`<strong>⚠ Fix uncertain</strong> — \${esc(r.error || 'review confidence below')}\` + (r.confidence ? renderConfidence(r.confidence) : ''), 'error');
             }
         } else if (m.cmd === 'error') {
             fixBtn.disabled = false;
-            setStatus('<strong>✗ Error:</strong> ' + m.message, 'error');
+            setStatus('<strong>✗ Error:</strong> ' + esc(m.message), 'error');
         }
     });
 </script>

@@ -381,8 +381,8 @@ No. FixFleet runs **100% locally** on your machine. No FixFleet servers, no Azur
 <summary><b>What's the difference between the VSCode extension and the CLI?</b></summary>
 
 Same engine, two interfaces:
-- **CLI** (`pip install fixfleet`) — interactive terminal flow, beautiful styled output
-- **VSCode extension** — premium UI sidebar + click-to-fix workflow, calls the CLI under the hood
+- **CLI** (`pip install fixfleet`) — interactive terminal flow, beautiful styled output. The guided interactive mode currently supports GitLab; for the other trackers use the JSON flags (`fixfleet --list-bugs-json --provider github ...`) or the extension.
+- **VSCode extension** — premium UI sidebar + click-to-fix workflow for all 6 trackers, calls the CLI under the hood
 
 Install both if you want flexibility. Extension auto-installs the CLI on first run if missing.
 

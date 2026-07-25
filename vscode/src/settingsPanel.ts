@@ -78,18 +78,19 @@ export class SettingsPanel {
     private async sendInitData() {
         const cfg = vscode.workspace.getConfiguration('fixfleet');
         let backends: BackendInfo[] = [];
+        let providers: any[] = [];
+        let cliError = '';
         try {
             const result = await listBackends();
             backends = result.cli_backends || [];
             // Providers come back inside listBackends() too in v0.4.2+
-            const providers = (result as any).providers || [];
-            (this as any)._providersCache = providers;
+            providers = (result as any).providers || [];
         } catch (e) {
-            this.panel.webview.postMessage({
-                cmd: 'cliMissing',
-                message: (e as Error).message,
-            });
-            return;
+            // CLI missing/broken: show the warning banner, but ALWAYS still send
+            // the saved settings below — otherwise the form loads empty and a
+            // Save would wipe every stored value.
+            cliError = (e as Error).message;
+            this.panel.webview.postMessage({ cmd: 'cliMissing', message: cliError });
         }
 
         this.panel.webview.postMessage({
@@ -103,7 +104,8 @@ export class SettingsPanel {
                 dateFilter: cfg.get<string>('dateFilter') || '',
             },
             backends,
-            providers: (this as any)._providersCache || [],
+            providers,
+            cliError,
             workspaceDir: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '',
         });
     }
