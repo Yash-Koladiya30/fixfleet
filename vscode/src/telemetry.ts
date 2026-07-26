@@ -16,8 +16,8 @@ import * as vscode from 'vscode';
 
 // Fill these from your Firebase/GA4 project (same values as bugfixer/telemetry.py).
 // Not filled = telemetry silently disabled.
-const MEASUREMENT_ID = ''; // e.g. 'G-XXXXXXXXXX'
-const API_SECRET = '';     // GA4 Measurement Protocol API secret
+const MEASUREMENT_ID = 'G-RB1CHG2YLD';
+const API_SECRET = 'DORXWPkpQ2uDnsz0PzzF8A';
 
 let extensionVersion = '';
 

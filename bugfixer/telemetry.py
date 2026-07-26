@@ -26,8 +26,8 @@ from . import __version__
 
 # Fill these from your Firebase/GA4 project (see module docstring).
 # Not filled = telemetry silently disabled.
-MEASUREMENT_ID = ""  # e.g. "G-XXXXXXXXXX"
-API_SECRET = ""      # GA4 Measurement Protocol API secret
+MEASUREMENT_ID = "G-RB1CHG2YLD"
+API_SECRET = "DORXWPkpQ2uDnsz0PzzF8A"
 
 ENDPOINT = "https://www.google-analytics.com/mp/collect"
 DEBUG_ENDPOINT = "https://www.google-analytics.com/debug/mp/collect"

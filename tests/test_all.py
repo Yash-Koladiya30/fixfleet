@@ -11,6 +11,9 @@ from pathlib import Path
 # Make sure the package is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# Telemetry must never fire during tests.
+os.environ["FIXFLEET_TELEMETRY"] = "0"
+
 from bugfixer import budget, confidence
 from bugfixer.backends import registry
 from bugfixer.cli import _sanitize_path

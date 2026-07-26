@@ -9,11 +9,16 @@ provider-side anyway.
 
 import io
 import json
+import os
 import sys
 import unittest
 import urllib.error
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+# Telemetry must never fire during tests — its background thread would consume
+# the mocked urlopen side_effect responses and poison unrelated assertions.
+os.environ["FIXFLEET_TELEMETRY"] = "0"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
