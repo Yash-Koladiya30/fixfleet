@@ -66,3 +66,7 @@ artifacts/
 logs/
 instagram-analytics/
 .claude/
+
+# GA4 telemetry secrets — never commit
+bugfixer/_ga.py
+vscode/ga-keys.json

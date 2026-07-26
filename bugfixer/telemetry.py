@@ -24,10 +24,15 @@ from pathlib import Path
 
 from . import __version__
 
-# Fill these from your Firebase/GA4 project (see module docstring).
-# Not filled = telemetry silently disabled.
+# Measurement ID is public by design (GA4 exposes it in every tagged page).
+# The API secret is NOT committed: it's loaded from bugfixer/_ga.py (a local,
+# git-ignored file present only on the release machine) or the FIXFLEET_GA_SECRET
+# env var. Missing secret = telemetry silently disabled.
 MEASUREMENT_ID = "G-RB1CHG2YLD"
-API_SECRET = "DORXWPkpQ2uDnsz0PzzF8A"
+try:
+    from ._ga import API_SECRET  # git-ignored; baked into locally-built wheels only
+except ImportError:
+    API_SECRET = os.environ.get("FIXFLEET_GA_SECRET", "")
 
 ENDPOINT = "https://www.google-analytics.com/mp/collect"
 DEBUG_ENDPOINT = "https://www.google-analytics.com/debug/mp/collect"

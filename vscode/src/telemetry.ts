@@ -11,22 +11,32 @@
  *  - Fire-and-forget with short timeout; failures are swallowed.
  */
 
+import * as fs from 'fs';
 import * as https from 'https';
+import * as path from 'path';
 import * as vscode from 'vscode';
 
-// Fill these from your Firebase/GA4 project (same values as bugfixer/telemetry.py).
-// Not filled = telemetry silently disabled.
+// Measurement ID is public by design (GA4 exposes it in every tagged page).
+// The API secret is NOT committed: it's read at activation from ga-keys.json in
+// the extension root — a git-ignored file present on the release machine and
+// bundled into locally-built .vsix packages only. Missing = telemetry disabled.
 const MEASUREMENT_ID = 'G-RB1CHG2YLD';
-const API_SECRET = 'DORXWPkpQ2uDnsz0PzzF8A';
+let apiSecret = '';
 
 let extensionVersion = '';
 
 export function initTelemetry(context: vscode.ExtensionContext) {
     extensionVersion = context.extension.packageJSON.version || '';
+    try {
+        const raw = fs.readFileSync(path.join(context.extensionPath, 'ga-keys.json'), 'utf8');
+        apiSecret = (JSON.parse(raw).api_secret as string) || '';
+    } catch {
+        apiSecret = ''; // no keys file → telemetry silently disabled
+    }
 }
 
 function enabled(): boolean {
-    if (!MEASUREMENT_ID || !API_SECRET) return false;
+    if (!MEASUREMENT_ID || !apiSecret) return false;
     if (!vscode.env.isTelemetryEnabled) return false;
     const cfg = vscode.workspace.getConfiguration('fixfleet');
     if (cfg.get<boolean>('telemetry') === false) return false;
@@ -64,7 +74,7 @@ export function track(eventName: string, params: Params = {}): void {
     const req = https.request(
         {
             hostname: 'www.google-analytics.com',
-            path: `/mp/collect?measurement_id=${MEASUREMENT_ID}&api_secret=${API_SECRET}`,
+            path: `/mp/collect?measurement_id=${MEASUREMENT_ID}&api_secret=${apiSecret}`,
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             timeout: 3000,
