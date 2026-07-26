@@ -200,6 +200,11 @@
           "type": "string",
           "default": "",
           "description": "Filter bugs created on/before YYYY-MM-DD."
+        },
+        "fixfleet.telemetry": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send anonymous usage events (event names + coarse metadata only — never code, tokens, URLs, or issue content). Also respects the global VS Code telemetry setting."
         }
       }
     }

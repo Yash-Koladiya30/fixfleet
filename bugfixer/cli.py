@@ -5,7 +5,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from . import budget, config, state, ui
+from . import budget, config, state, telemetry, ui
 from .backends.base import Backend, RunResult
 from .backends.registry import (
     API_PRESETS,
@@ -569,6 +569,7 @@ def _fix_issues(selected: list, project_dir: str, project_id: str,
                 failed += 1
                 continue
 
+        telemetry.track("fix_started", {"provider": "gitlab", "backend": backend.name})
         result: RunResult = backend.run(prompt, project_dir)
         consumed = check.estimated  # use estimate as proxy
 
@@ -589,6 +590,15 @@ def _fix_issues(selected: list, project_dir: str, project_id: str,
         # Apply confidence floor: low confidence + no diff = treat as failure
         if conf.final_score < 0.20 and not conf.files_changed:
             success = False
+
+        telemetry.track("fix_completed", {
+            "provider": "gitlab",
+            "backend": backend.name,
+            "success": success,
+            "timed_out": result.timed_out,
+            "confidence": conf.label(),
+            "files_changed": len(conf.files_changed),
+        })
 
         session_tokens += consumed
         state.record_usage(
@@ -636,20 +646,24 @@ def main():
     try:
         issues = fetch_bug_issues(token, project_id, date_filter, host=host)
     except GitLabAuthError as e:
+        telemetry.track("provider_error", {"provider": "gitlab", "code": e.code})
         ui.print_error(e.message)
         ui.print_info("Open https://gitlab.com/-/user_settings/personal_access_tokens to create a new token.")
         ui.print_end()
         sys.exit(1)
     except GitLabNotFoundError as e:
+        telemetry.track("provider_error", {"provider": "gitlab", "code": e.code})
         ui.print_error(e.message)
         ui.print_end()
         sys.exit(1)
     except GitLabNetworkError as e:
+        telemetry.track("provider_error", {"provider": "gitlab", "code": e.code})
         ui.print_error(e.message)
         ui.print_info("Check your internet connection and try again.")
         ui.print_end()
         sys.exit(1)
     except GitLabError as e:
+        telemetry.track("provider_error", {"provider": "gitlab", "code": e.code})
         ui.print_error(e.message)
         ui.print_end()
         sys.exit(1)

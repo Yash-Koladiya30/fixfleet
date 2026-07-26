@@ -3,6 +3,7 @@
  */
 import * as vscode from 'vscode';
 import { BackendInfo, listBackends } from './fixfleetCli';
+import { track } from './telemetry';
 
 export class SettingsPanel {
     private static current: SettingsPanel | undefined;
@@ -45,6 +46,7 @@ export class SettingsPanel {
                 await cfg.update('projectDir', msg.projectDir || '', vscode.ConfigurationTarget.Global);
                 await cfg.update('backend', msg.backend || 'claude', vscode.ConfigurationTarget.Global);
                 await cfg.update('dateFilter', msg.dateFilter || '', vscode.ConfigurationTarget.Global);
+                track('settings_saved', { provider: msg.provider || 'gitlab', backend: msg.backend || 'claude' });
                 vscode.window.showInformationMessage('FixFleet settings saved ✓');
                 vscode.commands.executeCommand('fixfleet.refresh');
                 this.panel.webview.postMessage({ cmd: 'saved' });

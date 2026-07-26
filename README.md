@@ -378,6 +378,17 @@ No. FixFleet runs **100% locally** on your machine. No FixFleet servers, no Azur
 </details>
 
 <details>
+<summary><b>Does FixFleet collect any data?</b></summary>
+
+Only anonymous usage analytics (via Google Analytics): event names and coarse metadata like provider key, backend name, and success/failure — **never your code, tokens, project URLs, or issue content**. Used purely to find bugs and see which trackers/backends need attention.
+
+Opt out anytime:
+- CLI: `fixfleet --config-set telemetry.enabled=false` (or set `DO_NOT_TRACK=1`)
+- VSCode: uncheck `fixfleet.telemetry` in settings (the global VS Code telemetry setting is respected too)
+
+</details>
+
+<details>
 <summary><b>What's the difference between the VSCode extension and the CLI?</b></summary>
 
 Same engine, two interfaces:

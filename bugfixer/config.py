@@ -26,6 +26,9 @@ DEFAULT_CONFIG = {
         "inline_max_lines": 250,
     },
     "skip_already_fixed": True,
+    "telemetry": {
+        "enabled": True,  # anonymous usage events only; see bugfixer/telemetry.py
+    },
 }
 
 

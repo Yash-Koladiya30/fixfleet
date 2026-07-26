@@ -4,6 +4,7 @@
  */
 import * as vscode from 'vscode';
 import { BugIssue, FixResult, fixBug } from './fixfleetCli';
+import { track } from './telemetry';
 
 export class BugPanel {
     private static activePanels = new Map<number, BugPanel>();
@@ -68,6 +69,7 @@ export class BugPanel {
         let projectDir = cfg.get<string>('projectDir') || '';
         const backend = cfg.get<string>('backend') || 'claude';
         const provider = cfg.get<string>('provider') || 'gitlab';
+        track('fix_clicked', { provider, backend });
 
         if (!projectDir) {
             projectDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';

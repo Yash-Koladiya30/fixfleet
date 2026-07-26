@@ -6,6 +6,7 @@ import { BugPanel } from './bugPanel';
 import { SettingsPanel } from './settingsPanel';
 import { FixFleetWebView } from './welcomeView';
 import { checkCliInstalled } from './fixfleetCli';
+import { initTelemetry, track } from './telemetry';
 
 let statusBar: vscode.StatusBarItem;
 
@@ -14,6 +15,8 @@ export const output = vscode.window.createOutputChannel('FixFleet');
 export function activate(context: vscode.ExtensionContext) {
     const version = context.extension.packageJSON.version;
     output.appendLine(`━━━ FixFleet v${version} activated at ${new Date().toISOString()} ━━━`);
+    initTelemetry(context);
+    track('extension_activated');
 
     // ── Register commands FIRST (before any async ops) ─────────
     // This guarantees the sidebar buttons work even during slow CLI checks.
@@ -58,6 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
 
         vscode.commands.registerCommand('fixfleet.installCli', () => {
+            track('install_cli_clicked');
             const terminal = vscode.window.createTerminal('Install FixFleet CLI');
             terminal.show();
             // Only append the PATH export to ~/.zshrc if it isn't already there
@@ -93,6 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     checkCliInstalled().then(cliStatus => {
         if (!cliStatus.installed) {
+            track('cli_missing');
             vscode.window
                 .showWarningMessage(
                     'FixFleet CLI not installed. Install it now?',

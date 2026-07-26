@@ -5,6 +5,7 @@
  */
 import * as vscode from 'vscode';
 import { BugIssue, FixFleetError, fixBug, listBugs } from './fixfleetCli';
+import { track } from './telemetry';
 import { BugPanel } from './bugPanel';
 
 type ViewState =
@@ -140,6 +141,7 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
         const projectUrl = cfg.get<string>('projectUrl') || '';
         const provider = cfg.get<string>('provider') || 'gitlab';
         const backend = cfg.get<string>('backend') || 'claude';
+        track('batch_fix_clicked', { provider, backend, count: this.selected.size });
         let projectDir = cfg.get<string>('projectDir') || '';
         if (!projectDir) {
             projectDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';

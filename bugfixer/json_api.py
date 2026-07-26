@@ -11,7 +11,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, budget, config, state
+from . import __version__, budget, config, state, telemetry
 from .backends.base import RunResult
 from .backends.registry import (
     API_PRESETS,
@@ -139,11 +139,20 @@ def cmd_list_bugs_json(args):
             date_to=getattr(args, "date_to", None),
         )
     except ProviderNotImplementedError as e:
+        telemetry.track("provider_error", {"provider": provider.key, "code": e.code})
         _err_from_gitlab(e)
     except ProviderError as e:
+        telemetry.track("provider_error", {"provider": provider.key, "code": e.code})
         _err_from_gitlab(e)
     except Exception as e:
+        telemetry.track("unexpected_error", {"where": "list_bugs", "type": type(e).__name__})
         _err(f"unexpected error: {e}", error_code="unexpected")
+
+    telemetry.track("bugs_listed", {
+        "provider": provider.key,
+        "count": len(issues),
+        "date_filter": bool(args.date or getattr(args, "date_from", None) or getattr(args, "date_to", None)),
+    })
 
     payload_issues = []
     for i in issues:
@@ -238,8 +247,10 @@ def cmd_fix_issue(args):
     try:
         issues = provider.fetch_bugs(token=token, project_id=project_id, host=host)
     except ProviderNotImplementedError as e:
+        telemetry.track("provider_error", {"provider": provider.key, "code": e.code})
         _err_from_gitlab(e)
     except ProviderError as e:
+        telemetry.track("provider_error", {"provider": provider.key, "code": e.code})
         _err_from_gitlab(e)
     target = next(
         (i for i in issues if str(i.get("iid")) == str(issue_iid)),
@@ -261,6 +272,7 @@ def cmd_fix_issue(args):
         budgets=cfg_budgets,
     )
     if not check.allowed and not getattr(args, "force", False):
+        telemetry.track("budget_blocked", {"backend": backend.name})
         _emit({
             "ok": False,
             "code": "budget_exceeded",
@@ -275,6 +287,7 @@ def cmd_fix_issue(args):
         sys.exit(1)
 
     # Run backend
+    telemetry.track("fix_started", {"provider": provider.key, "backend": backend.name})
     result: RunResult = backend.run(prompt, project_dir)
     conf = evaluate_confidence(
         result.stdout, project_dir,
@@ -283,6 +296,14 @@ def cmd_fix_issue(args):
     )
 
     success = result.ok and (conf.final_score >= 0.20 or conf.files_changed)
+    telemetry.track("fix_completed", {
+        "provider": provider.key,
+        "backend": backend.name,
+        "success": success,
+        "timed_out": result.timed_out,
+        "confidence": conf.label(),
+        "files_changed": len(conf.files_changed),
+    })
     state.record_usage(
         backend_name=backend.name,
         tokens=check.estimated,
@@ -422,25 +443,31 @@ def main():
     args.backend = args.backend or os.environ.get("BUGFIXER_BACKEND", "")
 
     if args.backends_json:
+        telemetry.track("cli_start", {"mode": "backends_json"})
         cmd_backends_json()
         return
     if args.providers_json:
         cmd_providers_json()
         return
     if args.list_bugs_json:
+        telemetry.track("cli_start", {"mode": "list_bugs_json"})
         cmd_list_bugs_json(args)
         return
     if args.fix_issue is not None:
+        telemetry.track("cli_start", {"mode": "fix_issue"})
         cmd_fix_issue(args)
         return
     if args.config_get:
         cmd_config_get()
         return
     if args.config_set:
+        telemetry.track("config_set", {"keys": ",".join(p.split("=")[0] for p in args.config_set)})
         cmd_config_set(args)
         return
 
     # No JSON flag → fall through to interactive CLI
+    telemetry.maybe_show_notice()
+    telemetry.track("cli_start", {"mode": "interactive"})
     from .cli import main as interactive_main
     interactive_main()
 
