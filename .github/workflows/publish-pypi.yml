@@ -42,6 +42,17 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -p 'test_*.py'
 
+      - name: Inject telemetry secret (from repo secret, never committed)
+        env:
+          GA_SECRET: ${{ secrets.FIXFLEET_GA_SECRET }}
+        run: |
+          if [ -n "$GA_SECRET" ]; then
+            printf 'API_SECRET = "%s"\n' "$GA_SECRET" > bugfixer/_ga.py
+            echo "Telemetry secret injected."
+          else
+            echo "FIXFLEET_GA_SECRET not set — building with telemetry disabled."
+          fi
+
       - name: Build distribution
         run: python -m build
 
