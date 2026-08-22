@@ -75,11 +75,20 @@ def print_summary(fixed: int, failed: int, total: int):
 
 
 def ask_input(prompt_text: str) -> str:
-    return input(f"  {BLUE}│  {MAGENTA}> {WHITE}{prompt_text}: {RESET}").strip()
+    try:
+        return input(f"  {BLUE}│  {MAGENTA}> {WHITE}{prompt_text}: {RESET}").strip()
+    except (EOFError, KeyboardInterrupt):
+        # Piped stdin or Ctrl+C — exit cleanly instead of tracebacking.
+        print(f"\n  {DIM}Bye!{RESET}")
+        raise SystemExit(1)
 
 
 def ask_secret(prompt_text: str) -> str:
-    return getpass.getpass(f"  {BLUE}│  {MAGENTA}> {WHITE}{prompt_text}: {RESET}").strip()
+    try:
+        return getpass.getpass(f"  {BLUE}│  {MAGENTA}> {WHITE}{prompt_text}: {RESET}").strip()
+    except (EOFError, KeyboardInterrupt):
+        print(f"\n  {DIM}Bye!{RESET}")
+        raise SystemExit(1)
 
 
 def get_priority(labels: list) -> tuple:
