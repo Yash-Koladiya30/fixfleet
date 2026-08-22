@@ -3,6 +3,7 @@
  */
 import * as vscode from 'vscode';
 import { BugPanel } from './bugPanel';
+import { ChatPanel } from './chatPanel';
 import { SettingsPanel } from './settingsPanel';
 import { FixFleetWebView } from './welcomeView';
 import { checkCliInstalled } from './fixfleetCli';
@@ -34,6 +35,11 @@ export function activate(context: vscode.ExtensionContext) {
 
         vscode.commands.registerCommand('fixfleet.openSettings', () => {
             SettingsPanel.createOrShow(context);
+        }),
+
+        vscode.commands.registerCommand('fixfleet.openChat', () => {
+            track('chat_opened');
+            ChatPanel.createOrShow(context);
         }),
 
         vscode.commands.registerCommand('fixfleet.openBug', (bug: any) => {

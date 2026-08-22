@@ -334,6 +334,63 @@ export async function listBugs(opts: {
     return unwrap(res);
 }
 
+/** Summary line emitted by `--auto-fix` (last JSON line after per-bug events). */
+export interface AutoFixSummary {
+    ok: boolean;
+    error?: string;
+    total?: number;
+    kept?: number;
+    reverted?: number;
+    failed?: number;
+    skipped?: number;
+    [k: string]: any;
+}
+
+/**
+ * Send one chat message to the FixFleet conversational CLI.
+ * Returns the bot reply plus an optional action object to execute.
+ */
+export async function chatMessage(text: string): Promise<{ reply: string; action: any }> {
+    const res = await runJson(['--chat-json', '--message', text], 60_000);
+    return unwrap(res);
+}
+
+/**
+ * Run the auto-fix pipeline. The CLI emits one JSON line per bug
+ * ({"event":"bug_done",...}) followed by a final summary line — runJson()
+ * returns the LAST JSON line, which is exactly that summary.
+ */
+export async function autoFix(opts: {
+    backend: string;
+    projectDir: string;
+    minConfidence: number;
+    /** Local bug file (xlsx/docx/pdf). When set, tracker args are not used. */
+    file?: string;
+    /** Tracker mode (no file): project URL + provider + token. */
+    projectUrl?: string;
+    provider?: string;
+    token?: string;
+    /** Restrict the run to one issue (file mode fix_one). */
+    fixIssue?: string;
+}): Promise<AutoFixSummary> {
+    const args = [
+        '--auto-fix',
+        '--backend', opts.backend,
+        '--project-dir', opts.projectDir,
+        '--min-confidence', String(opts.minConfidence),
+    ];
+    const env: Record<string, string> = {};
+    if (opts.file) {
+        args.push('--file', opts.file);
+    } else {
+        args.push('--project-url', opts.projectUrl || '', '--provider', opts.provider || 'gitlab');
+        // Token via BUGFIXER_TOKEN env var, never argv (see listBugs).
+        if (opts.token) env.BUGFIXER_TOKEN = opts.token;
+    }
+    if (opts.fixIssue) args.push('--fix-issue', opts.fixIssue);
+    return runJson(args, 900_000 * 4, env);
+}
+
 export async function fixBug(opts: {
     issueIid: number;
     backend: string;

@@ -187,6 +187,173 @@ def cmd_list_bugs_json(args):
     })
 
 
+# ── File sources ───────────────────────────────────────────────
+
+def _bugs_from_file(path: str) -> tuple:
+    """Parse bugs from a local file. Returns (source_label, bugs). Exits with
+    structured JSON on failure."""
+    from . import buglist
+    from .files import FileSourceError, parse_bug_file
+    try:
+        bugs = parse_bug_file(path)
+    except FileSourceError as e:
+        telemetry.track("file_source_error", {"code": e.code})
+        _err(e.message, error_code=e.code)
+    source = f"file:{Path(path).expanduser().resolve()}"
+    buglist.sync(source, bugs)
+    telemetry.track("file_source_used", {
+        "ext": Path(path).suffix.lower().lstrip("."), "count": len(bugs)})
+    return source, bugs
+
+
+def cmd_list_bugs_file(args):
+    from . import buglist
+    source, bugs = _bugs_from_file(args.file)
+    payload_issues = []
+    for b in bugs:
+        parsed = parse_issue(b)
+        entry = buglist.get(buglist.bug_key(source, b.get("iid"), b.get("title", "")))
+        payload_issues.append({
+            "iid": b.get("iid"),
+            "title": b.get("title", ""),
+            "web_url": b.get("web_url", ""),
+            "labels": b.get("labels", []),
+            "created_at": b.get("created_at", ""),
+            "updated_at": b.get("updated_at", ""),
+            "author": (b.get("author") or {}).get("username", ""),
+            "already_fixed": entry.get("status") == "fixed",
+            "status": entry.get("status", "new"),
+            "bug_key": entry.get("key", ""),
+            "sections": {
+                "description": parsed.description,
+                "steps": parsed.steps,
+                "expected": parsed.expected,
+                "actual": parsed.actual,
+                "environment": parsed.environment,
+                "logs": parsed.logs,
+                "notes": parsed.notes,
+            },
+        })
+    _emit({
+        "ok": True,
+        "host": "",
+        "project_id": source,
+        "count": len(payload_issues),
+        "issues": payload_issues,
+    })
+
+
+# ── Bug ledger ─────────────────────────────────────────────────
+
+def cmd_buglist_json(args):
+    from . import buglist
+    _emit({
+        "ok": True,
+        "summary": buglist.summary(),
+        "bugs": buglist.list_bugs(status=getattr(args, "bug_status", None) or None),
+    })
+
+
+def cmd_mark_bug(args):
+    from . import buglist
+    if "=" not in (args.mark_bug or ""):
+        _err("--mark-bug requires KEY=STATUS (e.g. abc123=skipped)")
+    key, status = args.mark_bug.split("=", 1)
+    try:
+        ok = buglist.mark(key.strip(), status.strip())
+    except ValueError as e:
+        _err(str(e))
+    if not ok:
+        _err(f"unknown bug key: {key}")
+    _emit({"ok": True, "key": key.strip(), "status": status.strip()})
+
+
+# ── Chat ───────────────────────────────────────────────────────
+
+def cmd_chat(args):
+    from .chat import handle_message
+    telemetry.track("chat_message", {})
+    result = handle_message(args.message or "")
+    _emit({"ok": True, **result})
+
+
+# ── Auto-fix ───────────────────────────────────────────────────
+
+def _resolve_backend(backend_name: str):
+    for b in list_cli_backends():
+        if b.name == backend_name:
+            if not b.available():
+                _err(f"backend {backend_name} not installed")
+            return b
+    if backend_name == "openai_compat":
+        cfg = config.load()
+        api_cfg = cfg.get("api") or {}
+        if not (api_cfg.get("base_url") and api_cfg.get("model")):
+            _err("API backend not configured. Run `fixfleet` interactively first to save API config.")
+        return build_api_backend(
+            base_url=api_cfg["base_url"],
+            api_key=api_cfg.get("api_key", ""),
+            model=api_cfg["model"],
+        )
+    _err(f"unknown backend: {backend_name}")
+
+
+def cmd_auto_fix(args):
+    from . import autofix
+
+    if not args.project_dir:
+        _err("--project-dir required")
+    if not Path(args.project_dir).is_dir():
+        _err(f"project-dir not found: {args.project_dir}")
+    if not args.backend:
+        _err("--backend required")
+    backend = _resolve_backend(args.backend)
+
+    if args.file:
+        source, bugs = _bugs_from_file(args.file)
+    else:
+        if not args.token:
+            _err("--token required (or use --file for a local bug file)")
+        if not args.project_url:
+            _err("--project-url required (or use --file)")
+        from .providers import ProviderError, detect_provider_from_url, get_provider
+        provider = get_provider(args.provider) if args.provider else None
+        if provider is None:
+            provider = detect_provider_from_url(args.project_url) or get_provider("gitlab")
+        try:
+            host, project_id = provider.parse_url(args.project_url)
+            bugs = provider.fetch_bugs(token=args.token, project_id=project_id, host=host)
+        except ProviderError as e:
+            _err_from_gitlab(e)
+        except ValueError as e:
+            _err(f"invalid --project-url: {e}")
+        source = f"{provider.key}:{project_id}"
+
+    if args.fix_issue:
+        bugs = [b for b in bugs if str(b.get("iid")) == str(args.fix_issue)]
+        if not bugs:
+            _err(f"issue #{args.fix_issue} not found in source")
+
+    min_conf = args.min_confidence if args.min_confidence is not None \
+        else autofix.DEFAULT_MIN_CONFIDENCE
+    cfg = config.load()
+
+    def progress(r):
+        # Stream one JSON line per bug so UIs can show live progress.
+        _emit({"event": "bug_done", **r.__dict__})
+
+    summary = autofix.run_autofix(
+        bugs, source, args.project_dir, backend,
+        min_confidence=min_conf,
+        max_bugs=int(args.max_bugs or 0),
+        locator_cfg=cfg.get("locator") or {},
+        progress=progress,
+    )
+    _emit(summary)
+    if not summary.get("ok"):
+        sys.exit(1)
+
+
 # ── Fix one issue ──────────────────────────────────────────────
 
 def cmd_fix_issue(args):
@@ -414,6 +581,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config-set", action="append", metavar="KEY=VALUE",
                    help="Set a config key (use dot notation, e.g. api.base_url=...)")
 
+    # File sources + bug ledger + auto-fix + chat
+    p.add_argument("--file", metavar="PATH",
+                   help="Local bug file (.xlsx, .docx, .pdf) to use as the bug source")
+    p.add_argument("--auto-fix", action="store_true",
+                   help="Fix bugs in bulk; keep only fixes at/above --min-confidence, revert the rest")
+    p.add_argument("--min-confidence", type=float, default=None, metavar="0.0-1.0",
+                   help="Confidence threshold for --auto-fix (default 0.70)")
+    p.add_argument("--max-bugs", type=int, default=0, metavar="N",
+                   help="Stop --auto-fix after N bugs (0 = no limit)")
+    p.add_argument("--buglist-json", action="store_true",
+                   help="Show the tracked bug ledger (all sources) as JSON")
+    p.add_argument("--bug-status", dest="bug_status", default="",
+                   help="Filter --buglist-json by status (new/fixing/fixed/failed/skipped/duplicate)")
+    p.add_argument("--mark-bug", metavar="KEY=STATUS",
+                   help="Manually set a tracked bug's status (e.g. abc123=skipped)")
+    p.add_argument("--chat-json", action="store_true",
+                   help="Chat engine: interpret --message, reply + optional action as JSON")
+    p.add_argument("--message", default="", help="Message text for --chat-json")
+
     # Shared params for non-interactive calls
     p.add_argument("--token", help="Issue-tracker token (or set BUGFIXER_TOKEN env var)")
     p.add_argument("--project-url", help="Project URL or ID")
@@ -449,13 +635,34 @@ def main():
     if args.providers_json:
         cmd_providers_json()
         return
+    if args.chat_json:
+        cmd_chat(args)
+        return
+    if args.buglist_json:
+        cmd_buglist_json(args)
+        return
+    if args.mark_bug:
+        cmd_mark_bug(args)
+        return
+    if args.auto_fix:
+        telemetry.track("cli_start", {"mode": "auto_fix"})
+        cmd_auto_fix(args)
+        return
     if args.list_bugs_json:
         telemetry.track("cli_start", {"mode": "list_bugs_json"})
-        cmd_list_bugs_json(args)
+        if args.file:
+            cmd_list_bugs_file(args)
+        else:
+            cmd_list_bugs_json(args)
         return
     if args.fix_issue is not None:
         telemetry.track("cli_start", {"mode": "fix_issue"})
-        cmd_fix_issue(args)
+        if args.file:
+            # Single-issue fix from a file source runs through the auto-fix
+            # engine (ledger tracking + confidence-based revert).
+            cmd_auto_fix(args)
+        else:
+            cmd_fix_issue(args)
         return
     if args.config_get:
         cmd_config_get()
