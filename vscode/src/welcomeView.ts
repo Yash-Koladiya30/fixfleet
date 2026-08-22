@@ -4,7 +4,7 @@
  * Color palette derived from extension icon: forest green + cream + walnut + sage.
  */
 import * as vscode from 'vscode';
-import { BugIssue, FixFleetError, fixBug, listBugs } from './fixfleetCli';
+import { BugIssue, BuglistEntry, FixFleetError, buglistJson, fixBug, listBugs } from './fixfleetCli';
 import { track } from './telemetry';
 import { BugPanel } from './bugPanel';
 
@@ -13,6 +13,7 @@ type ViewState =
     | 'loading'
     | 'empty'
     | 'has-bugs'
+    | 'file-mode'
     | 'error-auth'
     | 'error-notfound'
     | 'error-network'
@@ -26,6 +27,10 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
     private bugs: BugIssue[] = [];
     private currentState: ViewState = 'loading';
     private errorMsg = '';
+
+    /** Chat-driven (file-mode) bug ledger. */
+    private fileBugs: BuglistEntry[] = [];
+    private fileSummary: Record<string, number> = {};
 
     /** IIDs of bugs the user has ticked. */
     private selected: Set<number> = new Set();
@@ -84,6 +89,14 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
                 vscode.commands.executeCommand('fixfleet.installCli');
                 break;
             case 'openChat':
+                vscode.commands.executeCommand('fixfleet.openChat');
+                break;
+            case 'startFileMode':
+                // Switch to chat-driven file mode (no token needed) and open chat.
+                // The fixfleet.* config listener in extension.ts refreshes this view.
+                await vscode.workspace.getConfiguration('fixfleet').update(
+                    'sourceMode', 'file', vscode.ConfigurationTarget.Global,
+                );
                 vscode.commands.executeCommand('fixfleet.openChat');
                 break;
             case 'openTokenPage': {
@@ -236,6 +249,13 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
         const dateFrom = cfg.get<string>('dateFrom') || '';
         const dateTo = cfg.get<string>('dateTo') || '';
         const provider = cfg.get<string>('provider') || 'gitlab';
+        const sourceMode = cfg.get<string>('sourceMode') || 'tracker';
+
+        // File mode is chat-driven: no token/URL needed — always "configured".
+        if (sourceMode === 'file') {
+            await this.refreshFileMode();
+            return;
+        }
 
         if (!token || !projectUrl) {
             this.currentState = 'not-configured';
@@ -291,6 +311,29 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
         this.render();
     }
 
+    /** Refresh the chat-driven bug ledger (file mode — no token needed). */
+    private async refreshFileMode() {
+        this.currentState = 'loading';
+        this.render();
+        try {
+            const result = await buglistJson();
+            this.fileBugs = result.bugs || [];
+            this.fileSummary = result.summary || {};
+            this.currentState = 'file-mode';
+            this.errorMsg = '';
+        } catch (e) {
+            this.fileBugs = [];
+            this.fileSummary = {};
+            if (e instanceof FixFleetError && e.isCliMissing) {
+                this.currentState = 'error-cli-missing';
+            } else {
+                this.currentState = 'error-generic';
+            }
+            this.errorMsg = (e as Error).message || 'Unknown error';
+        }
+        this.render();
+    }
+
     public getBugs() {
         return this.bugs;
     }
@@ -339,6 +382,8 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
                 return header + this.renderEmpty();
             case 'has-bugs':
                 return header + this.renderBugs();
+            case 'file-mode':
+                return header + this.renderFileMode();
             case 'error-auth':
                 return header + this.renderErrorAuth();
             case 'error-notfound':
@@ -359,7 +404,7 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
                     <div class="step-num">1</div>
                     <div class="step-body">
                         <div class="step-title">Connect your tracker</div>
-                        <div class="step-text">Paste your token + project URL to start.</div>
+                        <div class="step-text">— or skip it: load an Excel/Word/PDF bug file in Chat (no token needed).</div>
                     </div>
                 </div>
                 <div class="step">
@@ -387,8 +432,8 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
                 <button class="btn btn-primary btn-block" onclick="send('configure')">
                     ⚙ &nbsp;Configure FixFleet
                 </button>
-                <button class="btn btn-outline btn-block" onclick="send('openChat')">
-                    💬 &nbsp;Open Chat
+                <button class="btn btn-outline btn-block" onclick="send('startFileMode')">
+                    💬 &nbsp;Start with a bug file — no token needed
                 </button>
 
                 <div class="muted">Configuration takes 30 seconds.</div>
@@ -638,6 +683,77 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
             ${selectBar}
             <div class="bug-list">${list}</div>
             ${this.bugListBehavior()}
+        `;
+    }
+
+    /** Chat-driven mode: render the file-based bug ledger (no token needed). */
+    private renderFileMode(): string {
+        const s = this.fileSummary || {};
+        const statuses = ['new', 'fixing', 'fixed', 'failed', 'skipped', 'duplicate'];
+        const chips = statuses
+            .filter(k => (s[k] || 0) > 0)
+            .map(k => `<div class="summary-pill st-${k}">${s[k]} ${this.escape(k)}</div>`)
+            .join('');
+
+        const top = `
+            <div class="summary">
+                <div class="summary-pill total">${this.fileBugs.length} <span class="pill-label">tracked</span></div>
+                ${chips}
+            </div>
+            <div class="toolbar">
+                <button class="icon-btn" onclick="send('openChat')" title="Chat with FixFleet">💬</button>
+                <button class="icon-btn" onclick="send('refresh')" title="Refresh">⟳</button>
+                <button class="icon-btn" onclick="send('configure')" title="Settings">⚙</button>
+            </div>
+            <div class="mode-note">💬 Chat-driven mode — bugs come from files you load in Chat.</div>
+        `;
+
+        if (!this.fileBugs.length) {
+            return top + `
+                <div class="state-card">
+                    <div class="big-emoji">💬</div>
+                    <div class="state-title">No bugs tracked yet</div>
+                    <div class="muted">Open Chat and load a bug file (Excel · Word · PDF).</div>
+                    <button class="btn btn-primary btn-block" onclick="send('openChat')">
+                        💬 &nbsp;Open Chat
+                    </button>
+                </div>
+            `;
+        }
+
+        const rows = this.fileBugs
+            .map(b => {
+                const status = String(b.status || 'new').toLowerCase();
+                const badgeCls = statuses.includes(status) ? status : 'new';
+                const conf = typeof b.last_confidence === 'number'
+                    ? `${Math.round(b.last_confidence * 100)}%`
+                    : '';
+                return `
+                    <div class="bug-card file-bug" data-chat-open="1">
+                        <div class="bug-row">
+                            <div class="bug-iid">#${this.escape(String(b.iid ?? ''))}</div>
+                            <span class="badge-status st-${badgeCls}">${this.escape(status.toUpperCase())}</span>
+                        </div>
+                        <div class="bug-title">${this.escape(b.title || '')}</div>
+                        <div class="bug-meta">
+                            ${b.source ? `<span>📄 ${this.escape(b.source)}</span>` : ''}
+                            ${conf ? `<span>🎯 ${conf}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            })
+            .join('');
+
+        // Rows are informational — clicking opens the chat.
+        return top + `
+            <div class="bug-list">${rows}</div>
+            <script>
+            (function() {
+                document.querySelectorAll('[data-chat-open]').forEach(el => {
+                    el.addEventListener('click', () => send('openChat'));
+                });
+            })();
+            </script>
         `;
     }
 
@@ -1285,6 +1401,40 @@ const STYLES = `
         text-overflow: ellipsis;
         white-space: nowrap;
     }
+
+    /* ── Chat-driven (file) mode ──────────────────────────── */
+
+    .mode-note {
+        font-size: 11px;
+        color: var(--ff-sage);
+        font-style: italic;
+        text-align: center;
+        margin-bottom: 12px;
+    }
+
+    .badge-status {
+        margin-left: auto;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        border: 1px solid transparent;
+    }
+    .badge-status.st-new       { background: rgba(138, 168, 138, 0.18); color: var(--ff-sage); border-color: rgba(138, 168, 138, 0.4); }
+    .badge-status.st-fixing    { background: rgba(212, 193, 156, 0.25); color: var(--ff-champagne); border-color: rgba(212, 193, 156, 0.5); animation: pulse 1.4s ease-in-out infinite; }
+    .badge-status.st-fixed     { background: rgba(92, 148, 114, 0.25); color: var(--ff-emerald); border-color: rgba(92, 148, 114, 0.4); }
+    .badge-status.st-failed    { background: rgba(177, 79, 88, 0.25); color: var(--ff-burgundy); border-color: rgba(177, 79, 88, 0.4); }
+    .badge-status.st-skipped   { background: rgba(240, 230, 210, 0.06); color: var(--ff-sage); opacity: 0.7; }
+    .badge-status.st-duplicate { background: rgba(240, 230, 210, 0.06); color: var(--ff-sage); opacity: 0.7; font-style: italic; }
+
+    .summary-pill.st-new       { background: rgba(138, 168, 138, 0.18); border-color: rgba(138, 168, 138, 0.45); color: var(--ff-sage); }
+    .summary-pill.st-fixing    { background: rgba(212, 193, 156, 0.18); border-color: rgba(212, 193, 156, 0.45); color: var(--ff-champagne); }
+    .summary-pill.st-fixed     { background: rgba(92, 148, 114, 0.18); border-color: rgba(92, 148, 114, 0.45); color: var(--ff-emerald); }
+    .summary-pill.st-failed    { background: rgba(177, 79, 88, 0.18); border-color: rgba(177, 79, 88, 0.45); color: #E8A8B0; }
+    .summary-pill.st-skipped,
+    .summary-pill.st-duplicate { color: var(--ff-sage); opacity: 0.7; }
+    .summary-pill.st-duplicate { font-style: italic; }
 
     /* ── Queue progress bar ───────────────────────────────── */
 

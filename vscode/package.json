@@ -2,7 +2,7 @@
   "name": "fixfleet",
   "displayName": "FixFleet — AI Bug Fixer for GitHub, GitLab, Jira, Linear, Bitbucket, Azure DevOps",
   "description": "Auto-fix bugs from GitHub, GitLab, Jira, Linear, Bitbucket, or Azure DevOps using AI agents — Claude, Codex, Gemini, Cursor, Aider, Qwen, Groq, OpenAI-compatible. Premium UI.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "publisher": "YashKoladiya30",
   "icon": "media/icon.png",
   "galleryBanner": {
@@ -160,6 +160,12 @@
           "type": "string",
           "default": "python3",
           "description": "Path to Python interpreter (fallback if CLI binary not on PATH)."
+        },
+        "fixfleet.sourceMode": {
+          "type": "string",
+          "enum": ["tracker", "file"],
+          "default": "tracker",
+          "description": "Where bugs come from: your issue tracker (needs a token) or local bug files via Chat (no token needed)."
         },
         "fixfleet.provider": {
           "type": "string",

@@ -40,6 +40,9 @@ export class SettingsPanel {
                 break;
 
             case 'save':
+                // In file mode, token / projectUrl are optional and may stay empty —
+                // they're saved as-is either way (no validation required here).
+                await cfg.update('sourceMode', msg.sourceMode === 'file' ? 'file' : 'tracker', vscode.ConfigurationTarget.Global);
                 await cfg.update('provider', msg.provider || 'gitlab', vscode.ConfigurationTarget.Global);
                 await cfg.update('gitlabToken', msg.gitlabToken || '', vscode.ConfigurationTarget.Global);
                 await cfg.update('projectUrl', msg.projectUrl || '', vscode.ConfigurationTarget.Global);
@@ -74,6 +77,10 @@ export class SettingsPanel {
             case 'installCli':
                 vscode.commands.executeCommand('fixfleet.installCli');
                 break;
+
+            case 'openChat':
+                vscode.commands.executeCommand('fixfleet.openChat');
+                break;
         }
     }
 
@@ -98,6 +105,7 @@ export class SettingsPanel {
         this.panel.webview.postMessage({
             cmd: 'data',
             settings: {
+                sourceMode: cfg.get<string>('sourceMode') || 'tracker',
                 provider: cfg.get<string>('provider') || 'gitlab',
                 gitlabToken: cfg.get<string>('gitlabToken') || '',
                 projectUrl: cfg.get<string>('projectUrl') || '',
@@ -230,6 +238,15 @@ export class SettingsPanel {
                 background: color-mix(in srgb, var(--ff-primary) 8%, transparent);
                 border-color: var(--ff-primary);
             }
+            .btn-gold {
+                background: linear-gradient(135deg, #D4C19C, #D4A574);
+                color: #1F3329;
+                box-shadow: 0 4px 14px rgba(212, 193, 156, 0.3);
+            }
+            .btn-gold:hover:not(:disabled) {
+                filter: brightness(1.08);
+                box-shadow: 0 6px 20px rgba(212, 193, 156, 0.45);
+            }
 
             .backend-grid {
                 display: grid;
@@ -340,6 +357,27 @@ export class SettingsPanel {
     </div>
 
     <section class="card">
+        <div class="card-title">📥 Bug Source — Where do your bugs live?</div>
+        <div id="source-grid" class="backend-grid">
+            <div class="backend-card" data-mode="tracker">
+                <div class="backend-name">Issue Tracker</div>
+                <div class="backend-meta">GitHub, GitLab, Jira, Linear, Bitbucket, Azure DevOps — needs an access token</div>
+            </div>
+            <div class="backend-card" data-mode="file">
+                <div class="backend-name">Local bug files (Chat)</div>
+                <div class="backend-meta">Excel, Word, or PDF bug lists — no token or tracker needed. Fix via the chat.</div>
+            </div>
+        </div>
+        <input type="hidden" id="sourceMode" value="tracker">
+    </section>
+
+    <section class="card" id="file-mode-info" style="display:none;">
+        <div class="card-title">💬 Chat-Driven Mode</div>
+        <p style="margin:0 0 14px;">You're set — pick your AI backend and project folder below, then open Chat and load a bug file.</p>
+        <button class="btn btn-gold" onclick="vscode.postMessage({cmd:'openChat'})">💬 Open Chat</button>
+    </section>
+
+    <section class="card" id="section-provider">
         <div class="card-title">🔌 Issue Tracker Provider</div>
         <label>Where do your bugs live?
             <span class="hint">Pick your platform. FixFleet supports 6 trackers — URL is auto-detected.</span>
@@ -348,7 +386,7 @@ export class SettingsPanel {
         <input type="hidden" id="provider" value="gitlab">
     </section>
 
-    <section class="card">
+    <section class="card" id="section-token">
         <div class="card-title">🔑 Access Token</div>
         <label id="token-label">Personal Access Token
             <span class="hint" id="token-hint">Scope: <code>api</code> or <code>read_api</code>. Get one at <a class="help-link" id="token-link" href="https://gitlab.com/-/user_settings/personal_access_tokens" target="_blank">gitlab.com → Access Tokens</a></span>
@@ -358,10 +396,12 @@ export class SettingsPanel {
 
     <section class="card">
         <div class="card-title">📦 Project</div>
-        <label>Project / Repository URL
-            <span class="hint">Paste the full URL from your browser — provider + host + path auto-detected.</span>
-        </label>
-        <input type="text" id="projectUrl" placeholder="https://github.com/owner/repo  ·  https://gitlab.com/group/project  ·  ...">
+        <div id="project-url-block">
+            <label>Project / Repository URL
+                <span class="hint">Paste the full URL from your browser — provider + host + path auto-detected.</span>
+            </label>
+            <input type="text" id="projectUrl" placeholder="https://github.com/owner/repo  ·  https://gitlab.com/group/project  ·  ...">
+        </div>
 
         <label style="margin-top:18px;">Local Project Directory
             <span class="hint">Where the AI will edit files. Should be the cloned repo on your Mac.</span>
@@ -400,9 +440,27 @@ export class SettingsPanel {
 
 <script>
 const vscode = acquireVsCodeApi();
-const fields = ['provider','gitlabToken','projectUrl','projectDir','backend','dateFilter'];
+const fields = ['sourceMode','provider','gitlabToken','projectUrl','projectDir','backend','dateFilter'];
 let backends = [];
 let providers = [];
+
+function selectSourceMode(mode) {
+    mode = mode === 'file' ? 'file' : 'tracker';
+    document.getElementById('sourceMode').value = mode;
+    document.querySelectorAll('#source-grid .backend-card').forEach(el => {
+        el.classList.toggle('selected', el.dataset.mode === mode);
+    });
+    // File mode hides the tracker-only sections; tracker mode restores them.
+    const isFile = mode === 'file';
+    document.getElementById('section-provider').style.display = isFile ? 'none' : '';
+    document.getElementById('section-token').style.display = isFile ? 'none' : '';
+    document.getElementById('project-url-block').style.display = isFile ? 'none' : '';
+    document.getElementById('file-mode-info').style.display = isFile ? '' : 'none';
+}
+
+document.querySelectorAll('#source-grid .backend-card').forEach(el => {
+    el.onclick = () => selectSourceMode(el.dataset.mode);
+});
 
 function selectProvider(key) {
     document.getElementById('provider').value = key;
@@ -502,6 +560,7 @@ window.addEventListener('message', event => {
         renderBackends(backends, m.settings.backend);
         renderProviders(providers, m.settings.provider || 'gitlab');
         selectProvider(m.settings.provider || 'gitlab');
+        selectSourceMode(m.settings.sourceMode || 'tracker');
     } else if (m.cmd === 'cliMissing') {
         document.getElementById('install-warning').classList.add('visible');
     } else if (m.cmd === 'dirPicked') {

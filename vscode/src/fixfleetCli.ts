@@ -334,6 +334,28 @@ export async function listBugs(opts: {
     return unwrap(res);
 }
 
+/** One entry in the chat-driven bug ledger (`--buglist-json`). */
+export interface BuglistEntry {
+    key: string;
+    iid: string;
+    title: string;
+    status: string;
+    last_confidence?: number | null;
+    source?: string;
+    web_url?: string;
+}
+
+/**
+ * Fetch the chat-driven bug ledger (file-mode bugs). No token needed.
+ */
+export async function buglistJson(): Promise<{
+    summary: Record<string, number>;
+    bugs: BuglistEntry[];
+}> {
+    const res = await runJson(['--buglist-json'], 30_000);
+    return unwrap(res);
+}
+
 /** Summary line emitted by `--auto-fix` (last JSON line after per-bug events). */
 export interface AutoFixSummary {
     ok: boolean;
