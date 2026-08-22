@@ -73,12 +73,18 @@ FIX_REPORT_INSTRUCTIONS = """
 After making your changes, output **exactly** this block at the very end:
 
 === FIX REPORT ===
+VERDICT: <fixed | not_a_bug>
 ROOT_CAUSE: <one sentence describing the root cause>
 FILES_CHANGED: <comma-separated list of relative paths you edited>
 CONFIDENCE: <integer 1-10> / 10
 REASONING: <one sentence why this score>
 TESTS_RUN: <yes | no | n/a>
 === END FIX REPORT ===
+
+VERDICT rule: if after inspecting the relevant code you determine the
+reported behavior is actually CORRECT (no defect exists), make NO changes,
+set VERDICT: not_a_bug, and use REASONING to explain in one plain sentence
+why the code is fine. Otherwise VERDICT: fixed.
 
 CONFIDENCE guide:
   9-10: Root cause clearly identified, surgical fix, verified by tests.
@@ -89,12 +95,23 @@ CONFIDENCE guide:
 
 
 def build_prompt(issue: ParsedIssue, locator: LocatorResult = None,
-                 caps: dict = None) -> str:
-    """Build the full prompt. `locator` adds hint sections; `caps` overrides slimming."""
+                 caps: dict = None, kind: str = "bug") -> str:
+    """Build the full prompt. `locator` adds hint sections; `caps` overrides
+    slimming; `kind` is "bug" (fix a defect) or "enhancement" (implement a
+    request/suggestion)."""
     caps = {**DEFAULT_CAPS, **(caps or {})}
     parts: list = []
 
-    parts.append(f"# Fix GitLab issue #{issue.iid}")
+    if kind == "enhancement":
+        parts.append(f"# Implement request #{issue.iid}")
+        parts.append("")
+        parts.append(
+            "This item is a change request / suggestion, not a defect report. "
+            "Implement the smallest change that satisfies it. If it is already "
+            "implemented in the code, treat that like 'no defect exists' for the "
+            "VERDICT rule below.")
+    else:
+        parts.append(f"# Fix issue #{issue.iid}")
     parts.append("")
 
     parts.append(_section("Bug Title", slim(issue.title or "(no title)", caps["title"]), ""))

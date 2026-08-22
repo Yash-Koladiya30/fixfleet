@@ -77,8 +77,10 @@ class AutoFixResult:
 
 def fix_one(bug: dict, source: str, project_dir: str, backend,
             min_confidence: float = DEFAULT_MIN_CONFIDENCE,
-            locator_cfg: dict = None) -> AutoFixResult:
-    """Fix a single bug; keep or revert based on confidence. Updates the ledger."""
+            locator_cfg: dict = None, kind: str = "bug") -> AutoFixResult:
+    """Fix one bug (or implement one request); keep or revert based on
+    confidence. Updates the ledger. If the model inspects the code and finds
+    no defect, outcome is "not_a_bug" and nothing is changed."""
     key = buglist.bug_key(source, bug.get("iid"), bug.get("title", ""))
     res = AutoFixResult(key=key, iid=str(bug.get("iid")), title=bug.get("title", ""))
 
@@ -103,7 +105,7 @@ def fix_one(bug: dict, source: str, project_dir: str, backend,
     loc = locate(parsed, project_dir,
                  max_candidates=int(lc.get("max_candidates", 5)),
                  inline_top=bool(lc.get("inline_top_file", True)))
-    prompt = build_prompt(parsed, locator=loc)
+    prompt = build_prompt(parsed, locator=loc, kind=kind)
 
     telemetry.track("fix_started", {"provider": "autofix", "backend": backend.name})
     result = backend.run(prompt, project_dir)
@@ -119,6 +121,20 @@ def fix_one(bug: dict, source: str, project_dir: str, backend,
 
     check = budget.check_budget(prompt, backend.name, session_used=0,
                                 daily_used=state.get_daily_usage(backend.name))
+
+    # Model inspected the code and found no defect → report, change nothing.
+    if conf.verdict == "not_a_bug" and not conf.files_changed and result.ok:
+        res.outcome = "not_a_bug"
+        res.reason = conf.reasoning or "checked the code — the reported behavior is correct"
+        buglist.mark(key, "not_a_bug")
+        state.record_usage(backend_name=backend.name, tokens=check.estimated,
+                           project_id=source, issue_iid=bug.get("iid"), success=True)
+        telemetry.track("fix_completed", {
+            "provider": "autofix", "backend": backend.name, "success": True,
+            "timed_out": False, "confidence": "not_a_bug", "files_changed": 0,
+        })
+        return res
+
     kept = (result.ok and conf.files_changed
             and conf.final_score >= min_confidence and not result.timed_out)
 
@@ -171,29 +187,34 @@ def run_autofix(bugs: list, source: str, project_dir: str, backend,
     from .triage import triage as run_triage
     verdicts = run_triage(bugs, project_dir)
     alerts = []
-    fixable = []
+    workable = []
     for bug, v in zip(bugs, verdicts):
-        if v["verdict"] in ("not_a_bug", "not_relevant"):
+        if v["verdict"] == "not_relevant":
             key = buglist.bug_key(source, bug.get("iid"), bug.get("title", ""))
-            buglist.mark(key, v["verdict"])
+            buglist.mark(key, "not_relevant")
             alerts.append({
                 "iid": str(bug.get("iid")),
                 "title": bug.get("title", "")[:80],
-                "verdict": v["verdict"],
+                "verdict": "not_relevant",
                 "reason": v["reason"],
             })
         else:
-            fixable.append((bug, v))
+            workable.append((bug, v))
 
     results = []
-    for bug, v in fixable:
+    for bug, v in workable:
         if max_bugs and len([r for r in results if r.outcome != "skipped"]) >= max_bugs:
             break
         r = fix_one(bug, source, project_dir, backend,
-                    min_confidence=min_confidence, locator_cfg=locator_cfg)
-        if v["verdict"] == "unclear" and v["reason"]:
-            r.reason = (r.reason + "; " if r.reason else "") + v["reason"]
+                    min_confidence=min_confidence, locator_cfg=locator_cfg,
+                    kind=v.get("kind", "bug"))
         results.append(r)
+        # Code-checked "no defect found" → surface to the user as an alert.
+        if r.outcome == "not_a_bug":
+            alerts.append({
+                "iid": r.iid, "title": r.title[:80],
+                "verdict": "not_a_bug", "reason": r.reason,
+            })
         if progress:
             progress(r)
 
@@ -205,6 +226,7 @@ def run_autofix(bugs: list, source: str, project_dir: str, backend,
         "reverted": len([r for r in results if r.outcome == "reverted"]),
         "failed": len([r for r in results if r.outcome == "failed"]),
         "skipped": len([r for r in results if r.outcome == "skipped"]),
+        "not_a_bug": len([r for r in results if r.outcome == "not_a_bug"]),
         "alerts": alerts,
         "min_confidence": min_confidence,
         "results": [r.__dict__ for r in results],

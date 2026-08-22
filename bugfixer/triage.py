@@ -43,21 +43,24 @@ QA_SYSTEM_PROMPT = (
 
 
 def _heuristic_verdict(bug: dict, candidates: list, has_signals: bool) -> tuple:
-    """Return (verdict, reason) from cheap local signals."""
-    text = f"{bug.get('title', '')}\n{bug.get('description', '')}"
+    """Return (verdict, kind, reason) from cheap local signals.
 
-    if _FEATURE_RE.search(text) and not _BUG_SIGNAL_RE.search(text):
-        return "not_a_bug", "reads like a feature request, not a defect"
-    if _QUESTION_RE.search(text) and not _BUG_SIGNAL_RE.search(text):
-        return "not_a_bug", "reads like a question, not a defect"
+    verdict: "proceed" | "not_relevant" — feature requests and suggestions
+    PROCEED too (they get implemented); only wrong-project items are stopped
+    here. Whether something is truly "not a bug" is decided later, by the AI
+    actually inspecting the code.
+    """
+    text = f"{bug.get('title', '')}\n{bug.get('description', '')}"
 
     # Relevance: the issue mentioned concrete files/symbols but NONE exist here.
     if has_signals and not candidates:
-        return "not_relevant", "mentions files/components not found in this project"
+        return "not_relevant", "bug", "mentions files/components not found in this project"
 
-    if _BUG_SIGNAL_RE.search(text) or candidates:
-        return "bug", ""
-    return "unclear", "no clear defect signals — will attempt, but review the result"
+    if _FEATURE_RE.search(text) and not _BUG_SIGNAL_RE.search(text):
+        return "proceed", "enhancement", "suggestion/feature request — will implement it"
+    if _QUESTION_RE.search(text) and not _BUG_SIGNAL_RE.search(text):
+        return "proceed", "enhancement", "reads like a request — will attempt it"
+    return "proceed", "bug", ""
 
 
 def _ai_refine(items: list, project_hint: str) -> dict:
@@ -93,7 +96,11 @@ def _ai_refine(items: list, project_hint: str) -> dict:
 
 
 def triage(bugs: list, project_dir: str, use_ai: bool = True) -> list:
-    """Classify each bug. Returns [{verdict, reason, candidates}] parallel to bugs."""
+    """Classify each item. Returns [{verdict, kind, reason, candidates}].
+
+    verdict "proceed" → work on it (kind "bug" fixes, "enhancement" implements);
+    verdict "not_relevant" → skip + alert the user.
+    """
     results = []
     ai_items = []
     for b in bugs:
@@ -101,25 +108,28 @@ def triage(bugs: list, project_dir: str, use_ai: bool = True) -> list:
         signals = extract_signals(parsed)
         has_signals = bool(signals["files"] or signals["frames"] or signals["symbols"])
         candidates = rank_candidate_files(project_dir, signals, max_files=3)
-        verdict, reason = _heuristic_verdict(b, candidates, has_signals)
-        results.append({"verdict": verdict, "reason": reason, "candidates": candidates})
+        verdict, kind, reason = _heuristic_verdict(b, candidates, has_signals)
+        results.append({"verdict": verdict, "kind": kind, "reason": reason,
+                        "candidates": candidates})
         ai_items.append({
             "title": b.get("title", "")[:150],
             "description": (b.get("description") or "")[:400],
             "matching_project_files": candidates,
         })
 
-    # AI refinement only where heuristics were uncertain — and only downgrade
-    # or confirm; a heuristic "not_a_bug"/"not_relevant" stands unless AI says bug
-    # with the item having real candidates.
-    if use_ai and any(r["verdict"] in ("unclear", "bug") for r in results):
+    # Optional AI pass refines RELEVANCE only (never blocks work items).
+    if use_ai and any(r["verdict"] == "not_relevant" for r in results):
         refined = _ai_refine(ai_items, project_hint=project_dir)
         for i, r in enumerate(results):
             ai = refined.get(i)
             if not ai:
                 continue
-            if r["verdict"] in ("unclear", "bug"):
-                r["verdict"] = ai["verdict"]
+            # AI can rescue a heuristic not_relevant back to proceed, or confirm it.
+            if r["verdict"] == "not_relevant" and ai["verdict"] == "bug":
+                r["verdict"] = "proceed"
+                r["reason"] = ""
+            elif ai["verdict"] == "not_relevant":
+                r["verdict"] = "not_relevant"
                 if ai["reason"]:
                     r["reason"] = ai["reason"]
     return results

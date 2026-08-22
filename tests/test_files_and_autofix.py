@@ -395,34 +395,40 @@ class TestTriage(unittest.TestCase):
     def test_real_bug_passes(self):
         v = self._t([{"iid": 1, "title": "login() crashes with TypeError",
                       "description": "auth.py raises TypeError on empty user"}])
-        self.assertEqual(v[0]["verdict"], "bug")
+        self.assertEqual(v[0]["verdict"], "proceed")
+        self.assertEqual(v[0]["kind"], "bug")
 
-    def test_feature_request_flagged(self):
+    def test_feature_request_proceeds_as_enhancement(self):
         v = self._t([{"iid": 2, "title": "Feature request: add dark mode",
                       "description": "Would be nice to support dark mode please add"}])
-        self.assertEqual(v[0]["verdict"], "not_a_bug")
+        self.assertEqual(v[0]["verdict"], "proceed")  # suggestions get implemented
+        self.assertEqual(v[0]["kind"], "enhancement")
 
-    def test_question_flagged(self):
+    def test_question_proceeds(self):
         v = self._t([{"iid": 3, "title": "How do I configure the app?",
                       "description": "Question: is it possible to change the port"}])
-        self.assertEqual(v[0]["verdict"], "not_a_bug")
+        self.assertEqual(v[0]["verdict"], "proceed")
 
     def test_irrelevant_project_flagged(self):
         v = self._t([{"iid": 4, "title": "PaymentGatewayService throws error in checkout.swift",
                       "description": "File \"billing/stripe_handler.py\", line 10, in charge"}])
         self.assertEqual(v[0]["verdict"], "not_relevant")
 
-    def test_autofix_skips_non_bugs(self):
-        from bugfixer import autofix
+    def _mk_repo(self):
         import subprocess as sp
         repo = os.path.join(self.tmp, "repo")
-        os.makedirs(repo)
+        os.makedirs(repo, exist_ok=True)
         sp.run(["git", "init", "-q"], cwd=repo, check=True)
         sp.run(["git", "config", "user.email", "t@t"], cwd=repo)
         sp.run(["git", "config", "user.name", "t"], cwd=repo)
         Path(repo, "app.py").write_text("x = 1\n")
         sp.run(["git", "add", "-A"], cwd=repo, check=True)
         sp.run(["git", "commit", "-qm", "init"], cwd=repo, check=True)
+        return repo
+
+    def test_autofix_implements_feature_requests(self):
+        from bugfixer import autofix
+        repo = self._mk_repo()
         with patch("bugfixer.buglist.LIST_PATH", Path(self.tmp) / "ledger.json"), \
              patch("bugfixer.triage._ai_refine", return_value={}):
             backend = FakeBackend(repo, make_change=True, report_confidence="9")
@@ -430,9 +436,36 @@ class TestTriage(unittest.TestCase):
                 [{"iid": 1, "title": "Feature request: please add CSV export",
                   "description": "would be great", "labels": [], "web_url": ""}],
                 "file:t", repo, backend)
-        self.assertEqual(summary["total"], 0)
-        self.assertEqual(len(summary["alerts"]), 1)
+        # Suggestions are now implemented, not skipped.
+        self.assertEqual(summary["kept"], 1)
+        self.assertEqual(summary["alerts"], [])
+
+    def test_autofix_reports_code_checked_not_a_bug(self):
+        from bugfixer import autofix
+        repo = self._mk_repo()
+
+        class NotABugBackend(FakeBackend):
+            def run(self, prompt, project_dir, timeout=600):
+                from bugfixer.backends.base import RunResult
+                return RunResult(returncode=0, stdout=(
+                    "=== FIX REPORT ===\n"
+                    "VERDICT: not_a_bug\n"
+                    "ROOT_CAUSE: none\n"
+                    "CONFIDENCE: 9 / 10\n"
+                    "REASONING: the code already guards this case correctly\n"
+                    "TESTS_RUN: n/a\n"
+                    "=== END FIX REPORT ===\n"))
+
+        with patch("bugfixer.buglist.LIST_PATH", Path(self.tmp) / "ledger.json"), \
+             patch("bugfixer.triage._ai_refine", return_value={}):
+            backend = NotABugBackend(repo, make_change=False)
+            summary = autofix.run_autofix(
+                [{"iid": 5, "title": "app.py crashes on x", "description": "error in app.py",
+                  "labels": [], "web_url": ""}],
+                "file:t", repo, backend)
+        self.assertEqual(summary["not_a_bug"], 1)
         self.assertEqual(summary["alerts"][0]["verdict"], "not_a_bug")
+        self.assertIn("already guards", summary["alerts"][0]["reason"])
 
 
 # ── Screenshot extraction ──────────────────────────────────────

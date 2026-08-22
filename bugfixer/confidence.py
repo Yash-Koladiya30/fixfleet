@@ -46,6 +46,8 @@ class ConfidenceResult:
     diff_focus: float = 0.0   # 0..1
     file_relevance: float = 0.0  # 0..1
     tests_run: str = "unknown"
+    verdict: str = "fixed"     # "fixed" | "not_a_bug" (model inspected code, found no defect)
+    reasoning: str = ""
     notes: list = field(default_factory=list)
 
     def label(self) -> str:
@@ -181,6 +183,9 @@ def evaluate(stdout: str, project_dir: str,
     self_rating = parse_self_rating(fields)
     root_cause = fields.get("ROOT_CAUSE", "")
     tests_run = (fields.get("TESTS_RUN", "unknown") or "unknown").lower()
+    raw_verdict = (fields.get("VERDICT", "") or "").strip().lower().replace(" ", "_")
+    verdict = "not_a_bug" if "not_a_bug" in raw_verdict else "fixed"
+    reasoning = fields.get("REASONING", "")
 
     diff = git_diff_stats(project_dir)
     files_changed = diff.get("files", [])
@@ -228,5 +233,7 @@ def evaluate(stdout: str, project_dir: str,
         diff_focus=round(focus, 3),
         file_relevance=round(relevance, 3),
         tests_run=tests_run,
+        verdict=verdict,
+        reasoning=reasoning,
         notes=notes,
     )
