@@ -15,52 +15,25 @@ import re
 from .locator import extract_signals, rank_candidate_files
 from .parser import parse_issue
 
-# Phrases that signal a non-bug work item.
-_FEATURE_RE = re.compile(
-    r"\b(feature request|enhancement|add support|please add|would be (nice|great)|"
-    r"can you add|new feature|improvement|suggestion|proposal|request:)\b",
-    re.IGNORECASE,
-)
-_QUESTION_RE = re.compile(
-    r"\b(how (do|to|can) (i|we)|question:|is it possible|what is the)\b",
-    re.IGNORECASE,
-)
-_BUG_SIGNAL_RE = re.compile(
-    r"\b(crash|error|exception|fail|broken|freeze|hang|wrong|incorrect|"
-    r"doesn'?t work|not working|traceback|stack ?trace|regression|leak|"
-    r"unexpected|corrupt|500|404|npe|nullpointer|segfault)\b",
-    re.IGNORECASE,
-)
-
 QA_SYSTEM_PROMPT = (
-    "You are a senior QA engineer triaging a bug list before automated fixing. "
-    "For each item decide: is it a genuine software BUG (defect in existing "
-    "behavior), and does it plausibly belong to the given project? "
-    "Feature requests, questions, tasks, and vague complaints are NOT bugs. "
-    "Items referencing screens, files, or components that clearly don't exist "
-    "in this project are NOT relevant."
+    "You are a senior QA engineer triaging a work-item list before automated "
+    "fixing. For each item decide only RELEVANCE: does it plausibly belong to "
+    "the given project? Items referencing screens, files, or components that "
+    "clearly don't exist in this project are NOT relevant. Whether an item is "
+    "a defect or a suggestion does not matter here — both are worked on."
 )
 
 
 def _heuristic_verdict(bug: dict, candidates: list, has_signals: bool) -> tuple:
-    """Return (verdict, kind, reason) from cheap local signals.
+    """Return (verdict, reason) — relevance gate only.
 
-    verdict: "proceed" | "not_relevant" — feature requests and suggestions
-    PROCEED too (they get implemented); only wrong-project items are stopped
-    here. Whether something is truly "not a bug" is decided later, by the AI
-    actually inspecting the code.
+    Everything relevant PROCEEDS: the fixing AI itself understands whether an
+    item is a defect, a suggestion (however phrased), or not actually a bug —
+    no keyword guessing here. Only wrong-project items are stopped.
     """
-    text = f"{bug.get('title', '')}\n{bug.get('description', '')}"
-
-    # Relevance: the issue mentioned concrete files/symbols but NONE exist here.
     if has_signals and not candidates:
-        return "not_relevant", "bug", "mentions files/components not found in this project"
-
-    if _FEATURE_RE.search(text) and not _BUG_SIGNAL_RE.search(text):
-        return "proceed", "enhancement", "suggestion/feature request — will implement it"
-    if _QUESTION_RE.search(text) and not _BUG_SIGNAL_RE.search(text):
-        return "proceed", "enhancement", "reads like a request — will attempt it"
-    return "proceed", "bug", ""
+        return "not_relevant", "mentions files/components not found in this project"
+    return "proceed", ""
 
 
 def _ai_refine(items: list, project_hint: str) -> dict:
@@ -108,8 +81,8 @@ def triage(bugs: list, project_dir: str, use_ai: bool = True) -> list:
         signals = extract_signals(parsed)
         has_signals = bool(signals["files"] or signals["frames"] or signals["symbols"])
         candidates = rank_candidate_files(project_dir, signals, max_files=3)
-        verdict, kind, reason = _heuristic_verdict(b, candidates, has_signals)
-        results.append({"verdict": verdict, "kind": kind, "reason": reason,
+        verdict, reason = _heuristic_verdict(b, candidates, has_signals)
+        results.append({"verdict": verdict, "reason": reason,
                         "candidates": candidates})
         ai_items.append({
             "title": b.get("title", "")[:150],

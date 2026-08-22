@@ -77,10 +77,10 @@ class AutoFixResult:
 
 def fix_one(bug: dict, source: str, project_dir: str, backend,
             min_confidence: float = DEFAULT_MIN_CONFIDENCE,
-            locator_cfg: dict = None, kind: str = "bug") -> AutoFixResult:
-    """Fix one bug (or implement one request); keep or revert based on
-    confidence. Updates the ledger. If the model inspects the code and finds
-    no defect, outcome is "not_a_bug" and nothing is changed."""
+            locator_cfg: dict = None) -> AutoFixResult:
+    """Fix one bug (or implement one request — the model decides which); keep
+    or revert based on confidence. Updates the ledger. If the model inspects
+    the code and finds no defect, outcome is "not_a_bug" and nothing changes."""
     key = buglist.bug_key(source, bug.get("iid"), bug.get("title", ""))
     res = AutoFixResult(key=key, iid=str(bug.get("iid")), title=bug.get("title", ""))
 
@@ -105,7 +105,7 @@ def fix_one(bug: dict, source: str, project_dir: str, backend,
     loc = locate(parsed, project_dir,
                  max_candidates=int(lc.get("max_candidates", 5)),
                  inline_top=bool(lc.get("inline_top_file", True)))
-    prompt = build_prompt(parsed, locator=loc, kind=kind)
+    prompt = build_prompt(parsed, locator=loc)
 
     telemetry.track("fix_started", {"provider": "autofix", "backend": backend.name})
     result = backend.run(prompt, project_dir)
@@ -206,8 +206,7 @@ def run_autofix(bugs: list, source: str, project_dir: str, backend,
         if max_bugs and len([r for r in results if r.outcome != "skipped"]) >= max_bugs:
             break
         r = fix_one(bug, source, project_dir, backend,
-                    min_confidence=min_confidence, locator_cfg=locator_cfg,
-                    kind=v.get("kind", "bug"))
+                    min_confidence=min_confidence, locator_cfg=locator_cfg)
         results.append(r)
         # Code-checked "no defect found" → surface to the user as an alert.
         if r.outcome == "not_a_bug":

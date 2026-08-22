@@ -396,13 +396,11 @@ class TestTriage(unittest.TestCase):
         v = self._t([{"iid": 1, "title": "login() crashes with TypeError",
                       "description": "auth.py raises TypeError on empty user"}])
         self.assertEqual(v[0]["verdict"], "proceed")
-        self.assertEqual(v[0]["kind"], "bug")
 
-    def test_feature_request_proceeds_as_enhancement(self):
+    def test_feature_request_proceeds(self):
         v = self._t([{"iid": 2, "title": "Feature request: add dark mode",
                       "description": "Would be nice to support dark mode please add"}])
         self.assertEqual(v[0]["verdict"], "proceed")  # suggestions get implemented
-        self.assertEqual(v[0]["kind"], "enhancement")
 
     def test_question_proceeds(self):
         v = self._t([{"iid": 3, "title": "How do I configure the app?",
