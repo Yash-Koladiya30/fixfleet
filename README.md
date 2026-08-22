@@ -34,15 +34,15 @@
 <tr>
 <td width="33%" align="center">
 <img src="vscode/media/screenshots/welcome.png" alt="Welcome screen" />
-<br/><sub><b>Welcome</b><br/>3-step onboarding</sub>
+<br/><sub><b>Welcome</b><br/>Tracker or bug file — your choice</sub>
 </td>
 <td width="33%" align="center">
-<img src="vscode/media/screenshots/settings-credentials.png" alt="Settings credentials" />
-<br/><sub><b>Settings</b><br/>GitLab credentials + project</sub>
+<img src="vscode/media/screenshots/chat.png" alt="FixFleet Chat" />
+<br/><sub><b>Chat</b><br/>Load bug files · "fix all" · QA-checked results</sub>
 </td>
 <td width="33%" align="center">
-<img src="vscode/media/screenshots/settings-backends.png" alt="Settings backends" />
-<br/><sub><b>AI Backends</b><br/>Pick your agent · date filter</sub>
+<img src="vscode/media/screenshots/settings-tracker.png" alt="Settings" />
+<br/><sub><b>Settings</b><br/>6 trackers or token-free file mode · pick your AI</sub>
 </td>
 </tr>
 </table>

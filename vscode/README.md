@@ -8,17 +8,21 @@ Premium UI on top of the [FixFleet](https://github.com/Yash-Koladiya30/fixfleet)
 
 ## 📸 Screenshots
 
-### Welcome — 3-step onboarding
+### Welcome — start with a tracker or just a bug file
 
 ![Welcome screen](https://raw.githubusercontent.com/Yash-Koladiya30/fixfleet/main/vscode/media/screenshots/welcome.png)
 
-### Settings — credentials + project
+### Chat — load a bug file, say "fix all", review the results
 
-![Settings credentials](https://raw.githubusercontent.com/Yash-Koladiya30/fixfleet/main/vscode/media/screenshots/settings-credentials.png)
+![FixFleet Chat](https://raw.githubusercontent.com/Yash-Koladiya30/fixfleet/main/vscode/media/screenshots/chat.png)
 
-### Settings — AI backend grid + date filter
+### Chat-driven mode — no token or tracker needed
 
-![Settings backends](https://raw.githubusercontent.com/Yash-Koladiya30/fixfleet/main/vscode/media/screenshots/settings-backends.png)
+![Settings file mode](https://raw.githubusercontent.com/Yash-Koladiya30/fixfleet/main/vscode/media/screenshots/settings-file-mode.png)
+
+### Tracker mode — 6 issue trackers, URL auto-detected
+
+![Settings tracker mode](https://raw.githubusercontent.com/Yash-Koladiya30/fixfleet/main/vscode/media/screenshots/settings-tracker.png)
 
 ---
 
