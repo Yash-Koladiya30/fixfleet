@@ -37,6 +37,14 @@ except ImportError:
 ENDPOINT = "https://www.google-analytics.com/mp/collect"
 DEBUG_ENDPOINT = "https://www.google-analytics.com/debug/mp/collect"
 
+# Fork-safety: our subprocess runner uses start_new_session=True, which makes
+# CPython fork+exec instead of posix_spawn. Forking while this module's sender
+# thread holds SSL/network locks deadlocks the child before exec (Claude/other
+# CLIs then hang silently). The runner takes this lock around Popen, and the
+# sender holds it around the actual network call, so a fork can never land
+# mid-request.
+spawn_lock = threading.Lock()
+
 _ID_PATH = Path.home() / ".bugfixer-analytics.json"
 
 _NOTICE = (
@@ -146,11 +154,12 @@ def track(event_name: str, params: dict = None):
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                if debug:
-                    import sys
-                    print(f"[telemetry] {event_name}: {resp.read().decode()[:300]}",
-                          file=sys.stderr)
+            with spawn_lock:  # see spawn_lock comment — never in flight during a fork
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    if debug:
+                        import sys
+                        print(f"[telemetry] {event_name}: {resp.read().decode()[:300]}",
+                              file=sys.stderr)
         except Exception:
             pass  # telemetry must never break the tool
 

@@ -42,20 +42,26 @@ def run_with_tee(cmd: List[str], cwd: str, timeout: int = 600,
     captured_out: list = []
     captured_err: list = []
 
+    # start_new_session forces fork+exec (not posix_spawn); take the telemetry
+    # spawn lock so the fork can't land while a sender thread holds SSL locks —
+    # that deadlocks the child pre-exec and the CLI hangs silently.
+    from ..telemetry import spawn_lock
+
     try:
-        proc = subprocess.Popen(
-            cmd,
-            cwd=cwd,
-            stdin=subprocess.PIPE if stdin_data is not None else None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-            env={**os.environ, **(env or {})},
-            start_new_session=_IS_POSIX,  # own process group so timeout can kill the whole tree
-        )
+        with spawn_lock:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=cwd,
+                stdin=subprocess.PIPE if stdin_data is not None else None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+                env={**os.environ, **(env or {})},
+                start_new_session=_IS_POSIX,  # own process group so timeout can kill the whole tree
+            )
     except FileNotFoundError as e:
         return RunResult(returncode=127, stderr=str(e))
 
