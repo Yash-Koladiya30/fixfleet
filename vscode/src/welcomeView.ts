@@ -83,6 +83,9 @@ export class FixFleetWebView implements vscode.WebviewViewProvider {
             case 'install':
                 vscode.commands.executeCommand('fixfleet.installCli');
                 break;
+            case 'openChat':
+                vscode.commands.executeCommand('fixfleet.openChat');
+                break;
             case 'openTokenPage': {
                 const provider = vscode.workspace.getConfiguration('fixfleet').get<string>('provider') || 'gitlab';
                 const tokenUrls: Record<string, string> = {
@@ -373,9 +376,19 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
                         <div class="step-text">AI reads code, fixes locally, scores confidence.</div>
                     </div>
                 </div>
+                <div class="step">
+                    <div class="step-num">💬</div>
+                    <div class="step-body">
+                        <div class="step-title">Chat with FixFleet</div>
+                        <div class="step-text">Load bug files (Excel · Word · PDF), then say 'fix all confident' — the bot fixes bugs and keeps only high-confidence changes.</div>
+                    </div>
+                </div>
 
                 <button class="btn btn-primary btn-block" onclick="send('configure')">
                     ⚙ &nbsp;Configure FixFleet
+                </button>
+                <button class="btn btn-outline btn-block" onclick="send('openChat')">
+                    💬 &nbsp;Open Chat
                 </button>
 
                 <div class="muted">Configuration takes 30 seconds.</div>
@@ -520,6 +533,7 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
                 ${counts.low ? `<div class="summary-pill low">${counts.low} Low</div>` : ''}
             </div>
             <div class="toolbar">
+                <button class="icon-btn" onclick="send('openChat')" title="Chat with FixFleet">💬</button>
                 <button class="icon-btn" onclick="send('refresh')" title="Refresh">⟳</button>
                 <button class="icon-btn" onclick="send('configure')" title="Settings">⚙</button>
             </div>
@@ -881,6 +895,17 @@ const STYLES = `
     }
     .btn-secondary:hover:not(:disabled) {
         background: rgba(240, 230, 210, 0.12);
+        border-color: var(--ff-champagne);
+    }
+
+    .btn-outline {
+        background: transparent;
+        color: var(--ff-cream);
+        border-color: rgba(212, 193, 156, 0.55);
+    }
+    .btn-outline:hover:not(:disabled) {
+        background: var(--ff-champagne);
+        color: var(--ff-forest-deep);
         border-color: var(--ff-champagne);
     }
 

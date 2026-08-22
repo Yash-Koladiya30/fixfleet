@@ -5,6 +5,9 @@
  *
  * Transcript + prompt history persist in globalState so chat survives
  * VS Code restarts and mid-fix panel closes.
+ *
+ * Styling follows the FixFleet brand palette (mirrors welcomeView STYLES):
+ * deep forest green gradient, cream text, sage secondary, champagne gold accents.
  */
 import * as vscode from 'vscode';
 import { AutoFixSummary, FixResult, autoFix, chatMessage, fixBug } from './fixfleetCli';
@@ -121,7 +124,7 @@ export class ChatPanel {
         }
     }
 
-    /** 📎 button: pick an xlsx/docx/pdf and send `load <path>` through chat. */
+    /** 📎 chip: pick an xlsx/docx/pdf and send `load <path>` through chat. */
     private async pickBugFile() {
         const picked = await vscode.window.showOpenDialog({
             canSelectFiles: true,
@@ -278,15 +281,24 @@ export class ChatPanel {
 
         const styles = `
             :root {
-                --ff-primary: #3d5af1;
-                --ff-primary-hover: #2d4ad6;
-                --ff-gold: #c8a47e;
-                --ff-danger: #8b2c3d;
-                --ff-glass: rgba(255, 255, 255, 0.04);
-                --ff-border: var(--vscode-panel-border, rgba(127, 127, 127, 0.18));
-                --ff-user-bg: var(--vscode-button-background, var(--ff-primary));
-                --ff-user-fg: var(--vscode-button-foreground, #ffffff);
-                --ff-focus: var(--vscode-focusBorder, var(--ff-primary));
+                /* ── FixFleet brand palette (mirrors welcomeView) ── */
+                --ff-forest:        #2D4A3E;
+                --ff-forest-deep:   #1F3329;
+                --ff-cream:         #F0E6D2;
+                --ff-cream-soft:    #E8DCC0;
+                --ff-sage:          #8AA89A;
+                --ff-champagne:     #D4C19C;
+                --ff-amber:         #D4A574;
+                --ff-burgundy:      #B14F58;
+                --ff-emerald:       #5C9472;
+
+                --ff-radius: 12px;
+                --ff-border: rgba(240, 230, 210, 0.10);
+                --ff-border-strong: rgba(240, 230, 210, 0.18);
+                --ff-card: rgba(255, 255, 255, 0.04);
+                --ff-gold-border: rgba(212, 193, 156, 0.55);
+                /* VS Code vars kept only as fallbacks */
+                --ff-focus: var(--ff-champagne, var(--vscode-focusBorder));
             }
 
             * { box-sizing: border-box; }
@@ -295,8 +307,8 @@ export class ChatPanel {
 
             body {
                 font-family: -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif;
-                background: var(--vscode-editor-background);
-                color: var(--vscode-editor-foreground);
+                background: linear-gradient(180deg, var(--ff-forest-deep) 0%, #16241D 100%);
+                color: var(--ff-cream);
                 font-size: 13px;
                 line-height: 1.55;
                 display: flex;
@@ -306,27 +318,21 @@ export class ChatPanel {
             /* ── Header ───────────────────────────────────────── */
             header.bar {
                 flex-shrink: 0;
-                position: relative;
                 display: flex;
                 align-items: center;
                 gap: 10px;
                 padding: 12px 16px;
-                border-bottom: 1px solid var(--ff-border);
-                background: linear-gradient(135deg,
-                    color-mix(in srgb, var(--ff-primary) 10%, transparent),
-                    color-mix(in srgb, var(--ff-gold) 5%, transparent));
+                background: rgba(0, 0, 0, 0.28);
+                border-bottom: 1px solid var(--ff-gold-border);
             }
-            header.bar::before {
-                content: '';
-                position: absolute;
-                top: 0; left: 0; right: 0;
-                height: 3px;
-                background: linear-gradient(90deg, var(--ff-primary), var(--ff-gold));
+            .bar-title {
+                font-weight: 600;
+                letter-spacing: 0.2px;
+                color: var(--ff-cream);
             }
-            .bar-title { font-weight: 600; letter-spacing: 0.2px; }
             .bar-sub {
                 font-size: 11px;
-                opacity: 0.65;
+                color: var(--ff-sage);
                 font-family: "SF Mono", Menlo, monospace;
             }
             #clear-btn {
@@ -335,12 +341,12 @@ export class ChatPanel {
                 font-size: 13px;
                 padding: 4px 10px;
                 border-radius: 6px;
-                border: 1px solid var(--ff-border);
-                background: var(--ff-glass);
-                color: var(--vscode-editor-foreground);
+                border: 1px solid var(--ff-border-strong);
+                background: var(--ff-card);
+                color: var(--ff-cream);
                 cursor: pointer;
             }
-            #clear-btn:hover { border-color: var(--ff-danger); }
+            #clear-btn:hover { border-color: var(--ff-burgundy); }
 
             /* ── Message list ─────────────────────────────────── */
             #messages {
@@ -350,7 +356,16 @@ export class ChatPanel {
                 display: flex;
                 flex-direction: column;
                 gap: 10px;
+                scrollbar-width: thin;
+                scrollbar-color: rgba(138, 168, 154, 0.4) transparent;
             }
+            #messages::-webkit-scrollbar { width: 6px; }
+            #messages::-webkit-scrollbar-track { background: transparent; }
+            #messages::-webkit-scrollbar-thumb {
+                background: rgba(138, 168, 154, 0.35);
+                border-radius: 3px;
+            }
+            #messages::-webkit-scrollbar-thumb:hover { background: rgba(138, 168, 154, 0.55); }
 
             .row {
                 display: flex;
@@ -369,53 +384,56 @@ export class ChatPanel {
                 align-items: center;
                 justify-content: center;
                 font-size: 14px;
-                background: color-mix(in srgb, var(--ff-primary) 14%, transparent);
-                border: 1px solid var(--ff-border);
+                background: rgba(212, 193, 156, 0.12);
+                border: 1px solid var(--ff-gold-border);
             }
 
             .bubble {
                 padding: 9px 14px;
-                border-radius: 12px;
-                border: 1px solid var(--ff-border);
+                border-radius: var(--ff-radius);
+                border: 1px solid var(--ff-border-strong);
                 word-wrap: break-word;
                 overflow-wrap: anywhere;
                 min-width: 0;
             }
             .row.user .bubble {
-                background: var(--ff-user-bg);
-                color: var(--ff-user-fg);
+                background: linear-gradient(135deg, var(--ff-champagne), var(--ff-amber));
+                color: var(--ff-forest-deep);
                 border-color: transparent;
                 border-bottom-right-radius: 3px;
             }
             .row.bot .bubble {
-                background: var(--ff-glass);
+                background: var(--ff-card);
+                color: var(--ff-cream);
                 border-bottom-left-radius: 3px;
             }
             .row.bot.err .bubble {
-                border-color: color-mix(in srgb, var(--ff-danger) 55%, transparent);
-                background: color-mix(in srgb, var(--ff-danger) 10%, transparent);
+                border-color: rgba(177, 79, 88, 0.6);
+                background: rgba(177, 79, 88, 0.10);
             }
 
             .ts {
                 font-size: 9.5px;
-                opacity: 0.45;
+                color: var(--ff-sage);
+                opacity: 0.8;
                 margin-top: 4px;
                 text-align: right;
                 font-family: "SF Mono", Menlo, monospace;
             }
+            .row.user .ts { color: rgba(31, 51, 41, 0.65); }
 
             /* ── Working / status bubble ──────────────────────── */
             .row.working .bubble {
                 font-style: italic;
-                background: color-mix(in srgb, var(--ff-primary) 8%, transparent);
-                border-color: color-mix(in srgb, var(--ff-primary) 40%, transparent);
+                background: var(--ff-card);
+                border-color: var(--ff-gold-border);
             }
             .shimmer {
                 height: 3px;
                 margin-top: 8px;
                 border-radius: 2px;
                 overflow: hidden;
-                background: color-mix(in srgb, var(--ff-primary) 15%, transparent);
+                background: rgba(212, 193, 156, 0.18);
                 position: relative;
             }
             .shimmer::after {
@@ -424,11 +442,11 @@ export class ChatPanel {
                 top: 0; left: -40%;
                 width: 40%; height: 100%;
                 border-radius: 2px;
-                background: linear-gradient(90deg, transparent, var(--ff-primary), transparent);
+                background: linear-gradient(90deg, transparent, var(--ff-champagne), transparent);
             }
             .row.status-static .bubble {
                 font-style: italic;
-                opacity: 0.75;
+                color: var(--ff-sage);
             }
 
             /* ── Typing indicator ─────────────────────────────── */
@@ -436,8 +454,66 @@ export class ChatPanel {
             .dot {
                 width: 7px; height: 7px;
                 border-radius: 50%;
-                background: color-mix(in srgb, var(--vscode-editor-foreground) 55%, transparent);
+                background: rgba(212, 193, 156, 0.7);
                 display: inline-block;
+            }
+
+            /* ── Instruction / guide card ─────────────────────── */
+            .row.guide { max-width: 96%; }
+            .guide-title {
+                font-weight: 600;
+                color: var(--ff-champagne);
+                margin-bottom: 6px;
+                letter-spacing: 0.2px;
+            }
+            .guide-list {
+                margin: 0;
+                padding: 0;
+                list-style: none;
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+            }
+            .guide-list li { font-size: 12.5px; }
+            .bubble code {
+                background: rgba(0, 0, 0, 0.30);
+                color: var(--ff-champagne);
+                padding: 1px 5px;
+                border-radius: 4px;
+                font-family: "SF Mono", Menlo, monospace;
+                font-size: 11.5px;
+            }
+            .guide-tip {
+                margin-top: 8px;
+                font-size: 11px;
+                color: var(--ff-sage);
+                font-style: italic;
+            }
+
+            /* ── Quick-command chips ──────────────────────────── */
+            .chips {
+                flex-shrink: 0;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                padding: 8px 16px 0;
+            }
+            .chip {
+                font-family: inherit;
+                font-size: 11px;
+                font-weight: 600;
+                padding: 4px 12px;
+                border-radius: 999px;
+                background: transparent;
+                border: 1px solid var(--ff-gold-border);
+                color: var(--ff-cream);
+                cursor: pointer;
+                letter-spacing: 0.2px;
+            }
+            .chip:hover {
+                background: var(--ff-champagne);
+                color: var(--ff-forest-deep);
+                border-color: var(--ff-champagne);
             }
 
             /* ── Composer ─────────────────────────────────────── */
@@ -445,9 +521,7 @@ export class ChatPanel {
                 flex-shrink: 0;
                 display: flex;
                 gap: 8px;
-                padding: 12px 16px;
-                border-top: 1px solid var(--ff-border);
-                background: var(--ff-glass);
+                padding: 10px 16px 12px;
             }
             #input {
                 flex: 1;
@@ -455,37 +529,36 @@ export class ChatPanel {
                 font-size: 13px;
                 padding: 9px 12px;
                 border-radius: 8px;
-                border: 1px solid var(--ff-border);
-                background: var(--vscode-input-background, transparent);
-                color: var(--vscode-input-foreground, inherit);
+                border: 1px solid var(--ff-border-strong);
+                background: rgba(0, 0, 0, 0.25);
+                color: var(--ff-cream);
                 outline: none;
             }
+            #input::placeholder { color: var(--ff-sage); opacity: 0.7; }
             #input:focus {
                 border-color: var(--ff-focus);
-                box-shadow: 0 0 0 3px color-mix(in srgb, var(--ff-focus) 25%, transparent);
+                box-shadow: 0 0 0 3px rgba(212, 193, 156, 0.22);
             }
 
             button.btn {
                 font-family: inherit;
                 font-size: 13px;
-                font-weight: 600;
-                padding: 8px 16px;
+                font-weight: 700;
+                padding: 8px 18px;
                 border-radius: 8px;
                 border: 1px solid transparent;
                 cursor: pointer;
             }
             button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
             .btn-primary {
-                background: linear-gradient(135deg, var(--ff-primary), var(--ff-primary-hover));
-                color: white;
-                box-shadow: 0 4px 14px color-mix(in srgb, var(--ff-primary) 30%, transparent);
+                background: linear-gradient(135deg, var(--ff-champagne), var(--ff-amber));
+                color: var(--ff-forest-deep);
+                box-shadow: 0 4px 14px rgba(212, 193, 156, 0.25);
             }
-            .btn-secondary {
-                background: var(--ff-glass);
-                color: var(--vscode-editor-foreground);
-                border-color: var(--ff-border);
+            .btn-primary:hover:not(:disabled) {
+                filter: brightness(1.08);
+                box-shadow: 0 6px 20px rgba(212, 193, 156, 0.4);
             }
-            .btn-secondary:hover:not(:disabled) { border-color: var(--ff-primary); }
 
             /* ── Animations (skipped entirely for reduced motion) ── */
             @media (prefers-reduced-motion: no-preference) {
@@ -509,8 +582,8 @@ export class ChatPanel {
                     animation: glow 1.6s ease-in-out infinite;
                 }
                 @keyframes glow {
-                    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ff-primary) 0%, transparent); }
-                    50% { box-shadow: 0 0 14px 2px color-mix(in srgb, var(--ff-primary) 30%, transparent); }
+                    0%, 100% { box-shadow: 0 0 0 0 rgba(212, 193, 156, 0); }
+                    50% { box-shadow: 0 0 14px 2px rgba(212, 193, 156, 0.35); }
                 }
                 .shimmer::after { animation: shimmer 1.4s linear infinite; }
                 @keyframes shimmer {
@@ -520,13 +593,15 @@ export class ChatPanel {
 
                 .flash .bubble { animation: flash 700ms ease-out 1; }
                 @keyframes flash {
-                    0% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ff-gold) 60%, transparent); }
+                    0% { box-shadow: 0 0 0 3px rgba(212, 193, 156, 0.6); }
                     100% { box-shadow: 0 0 0 0 transparent; }
                 }
 
-                button.btn { transition: transform 0.12s ease, box-shadow 0.12s ease; }
+                button.btn { transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease; }
                 button.btn:hover:not(:disabled) { transform: scale(1.05); }
                 button.btn:active:not(:disabled) { transform: scale(0.95); }
+                .chip { transition: transform 0.1s ease, background 0.15s ease, color 0.15s ease; }
+                .chip:active { transform: scale(0.94); }
                 #input { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
                 #messages { transition: opacity 0.2s ease; }
             }
@@ -544,14 +619,20 @@ export class ChatPanel {
 <body>
 <header class="bar">
     <div>
-        <div class="bar-title">FixFleet Chat</div>
+        <div class="bar-title">🚀 FixFleet Chat</div>
         <div class="bar-sub">${backend} · ${provider}</div>
     </div>
     <button id="clear-btn" title="Clear chat history">🗑</button>
 </header>
 <div id="messages"></div>
+<div class="chips">
+    <button class="chip" data-send="help">Help</button>
+    <button class="chip" data-act="pick">📎 Load file</button>
+    <button class="chip" data-send="list bugs">List bugs</button>
+    <button class="chip" data-send="fix all confident">Fix all confident</button>
+    <button class="chip" data-send="status">Status</button>
+</div>
 <footer class="composer">
-    <button class="btn btn-secondary" id="file-btn" title="Load a bug file (xlsx, docx, pdf)">📎 Load bug file</button>
     <input id="input" type="text" placeholder="e.g. fix all bugs above 70% confidence…  (↑↓ for history)" />
     <button class="btn btn-primary" id="send-btn">Send</button>
 </footer>
@@ -561,12 +642,21 @@ export class ChatPanel {
     const messages = document.getElementById('messages');
     const input = document.getElementById('input');
     const sendBtn = document.getElementById('send-btn');
-    const fileBtn = document.getElementById('file-btn');
     const clearBtn = document.getElementById('clear-btn');
 
     const motionOK = window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
 
-    const GREETING = 'Hi! I\\'m FixFleet. Ask me to list your bugs, load a bug file (xlsx / docx / pdf), or just say "fix everything above 70% confidence".';
+    // Static instruction card shown when the transcript is empty.
+    const GUIDE_HTML =
+        '<div class="guide-title">What I can do</div>' +
+        '<ul class="guide-list">' +
+        '<li>📎 Load bugs from Excel / Word / PDF — click the clip or type <code>load &lt;path&gt;</code></li>' +
+        '<li>📋 <code>list bugs</code> / <code>status</code> — see everything tracked</li>' +
+        '<li>✨ <code>fix #3</code> — fix one bug</li>' +
+        '<li>🛡️ <code>fix all confident</code> — auto-fix, keeps only high-confidence fixes and reverts the rest</li>' +
+        '<li>⚙️ <code>set threshold 0.8</code> — raise/lower the bar</li>' +
+        '</ul>' +
+        '<div class="guide-tip">Tip: press ↑ to recall past prompts.</div>';
 
     function esc(s) {
         return String(s == null ? '' : s)
@@ -608,6 +698,15 @@ export class ChatPanel {
         messages.appendChild(row);
         scrollDown(opts.animate !== false);
         return row;
+    }
+
+    /** Insert the static instruction card as a wide bot bubble. */
+    function addGuide() {
+        const row = document.createElement('div');
+        row.className = 'row bot guide anim-in';
+        row.innerHTML = '<div class="avatar">🚀</div><div class="bubble">' + GUIDE_HTML + '</div>';
+        messages.appendChild(row);
+        scrollDown(false);
     }
 
     // ── Typing indicator + working-state bubble ────────────────
@@ -679,16 +778,21 @@ export class ChatPanel {
         if (prompts.length > 50) prompts = prompts.slice(-50);
     }
 
-    function send() {
-        const text = input.value.trim();
+    function sendText(text) {
+        text = String(text || '').trim();
         if (!text) return;
         rememberPrompt(text);
         histIdx = null;
         draft = '';
         addMsg('user', text);
-        input.value = '';
         queue.push(text);
         flushQueue();
+    }
+
+    function send() {
+        const text = input.value;
+        input.value = '';
+        sendText(text);
     }
 
     sendBtn.addEventListener('click', send);
@@ -717,7 +821,17 @@ export class ChatPanel {
     // Typing resets the history cursor back to live input.
     input.addEventListener('input', function () { histIdx = null; });
 
-    fileBtn.addEventListener('click', function () { vscode.postMessage({ cmd: 'pickFile' }); });
+    // Quick-command chips: send the command through the normal pipeline;
+    // the Load-file chip opens the native file picker instead.
+    document.querySelectorAll('.chip').forEach(function (chip) {
+        chip.addEventListener('click', function () {
+            if (chip.dataset.act === 'pick') {
+                vscode.postMessage({ cmd: 'pickFile' });
+            } else if (chip.dataset.send) {
+                sendText(chip.dataset.send);
+            }
+        });
+    });
 
     clearBtn.addEventListener('click', function () { vscode.postMessage({ cmd: 'clear' }); });
 
@@ -735,7 +849,7 @@ export class ChatPanel {
                 });
             });
             prompts = (m.prompts || []).slice(-50);
-            if (!(m.messages || []).length) addMsg('bot', GREETING);
+            if (!(m.messages || []).length) addGuide();
             scrollDown(false);
         } else if (m.cmd === 'user') {
             addMsg('user', m.text, { ts: m.ts });
@@ -760,7 +874,7 @@ export class ChatPanel {
                 statusEl = null;
                 messages.innerHTML = '';
                 messages.classList.remove('fading');
-                addMsg('bot', GREETING);
+                addGuide();
             }, motionOK ? 200 : 0);
         }
     });
