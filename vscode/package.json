@@ -1,8 +1,8 @@
 {
   "name": "fixfleet",
   "displayName": "FixFleet — AI Bug Fixer for GitHub, GitLab, Jira, Linear, Bitbucket, Azure DevOps",
-  "description": "Auto-fix bugs from GitHub, GitLab, Jira, Linear, Bitbucket, or Azure DevOps using AI agents — Claude, Codex, Gemini, Cursor, Aider, Qwen, Groq, OpenAI-compatible. Premium UI.",
-  "version": "0.2.3",
+  "description": "Auto-fix bugs from GitHub, GitLab, Jira, Linear, Bitbucket, Azure DevOps — or any Excel/Word/PDF bug list, no tracker needed. Chat 'fix all': AI fixes real bugs, implements suggestions, keeps only solid fixes. Claude, Codex, Gemini, Cursor, Aider, Qwen, Groq.",
+  "version": "1.6.0",
   "publisher": "YashKoladiya30",
   "icon": "media/icon.png",
   "galleryBanner": {
@@ -163,13 +163,23 @@
         },
         "fixfleet.sourceMode": {
           "type": "string",
-          "enum": ["tracker", "file"],
+          "enum": [
+            "tracker",
+            "file"
+          ],
           "default": "tracker",
           "description": "Where bugs come from: your issue tracker (needs a token) or local bug files via Chat (no token needed)."
         },
         "fixfleet.provider": {
           "type": "string",
-          "enum": ["gitlab", "github", "bitbucket", "jira", "linear", "azure"],
+          "enum": [
+            "gitlab",
+            "github",
+            "bitbucket",
+            "jira",
+            "linear",
+            "azure"
+          ],
           "enumDescriptions": [
             "GitLab (gitlab.com or self-hosted)",
             "GitHub (github.com or Enterprise)",
@@ -199,7 +209,15 @@
         },
         "fixfleet.backend": {
           "type": "string",
-          "enum": ["claude", "codex", "gemini", "cursor", "aider", "qwen", "openai_compat"],
+          "enum": [
+            "claude",
+            "codex",
+            "gemini",
+            "cursor",
+            "aider",
+            "qwen",
+            "openai_compat"
+          ],
           "default": "claude",
           "description": "Which AI backend to use for fixing bugs."
         },

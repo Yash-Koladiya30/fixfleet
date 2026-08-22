@@ -4,9 +4,9 @@
 
 # FixFleet
 
-### AI Bug Fixer for GitHub · GitLab · Jira · Linear · Bitbucket · Azure DevOps
+### AI Bug Fixer for GitHub · GitLab · Jira · Linear · Bitbucket · Azure DevOps — or any Excel / Word / PDF bug list
 
-*Reads open bug issues from any tracker, parses stack traces, pre-narrows the search to the right files, dispatches to your AI of choice, and scores fix confidence. All local. No commits. Bring your own AI.*
+*Reads bugs from your tracker **or straight from a bug file** (no tracker or token needed), parses stack traces and screenshots, pre-narrows the search to the right files, and dispatches to your AI of choice. Chat "fix all" — real bugs get fixed, suggestions get implemented, only solid fixes are kept (anything uncertain is undone), and items that aren't actually bugs are reported, not "fixed". All local. No commits. Bring your own AI.*
 
 <p>
   <a href="https://pypi.org/project/fixfleet/"><img src="https://img.shields.io/pypi/v/fixfleet.svg?label=pypi&color=2D6A4F&style=for-the-badge" alt="PyPI" /></a>
@@ -76,12 +76,20 @@ fixfleet
 
 ## ⚡ Quick start (60 seconds)
 
+### Fastest path — a bug file, no tracker, no token
+
 1. **Install** the VSCode extension (1 click above)
-2. **Get an access token** for your tracker — [full guides below](#-connect-your-tracker-token-setup-guides)
-3. **Click 🚀 FixFleet icon** in VSCode activity bar → **Configure** → pick provider → paste token + project URL → save
-4. **Click any bug** in sidebar → premium detail panel opens
-5. **Click ✨ Fix This Bug with AI** → AI agent reads the code, fixes the bug, scores confidence
-6. **Review the diff, commit yourself** — FixFleet never commits or pushes
+2. **Click 🚀 FixFleet icon** → **💬 Start with a bug file — no token needed**
+3. **📎 Load** your Excel / Word / PDF bug list — any column layout works, screenshots included
+4. Say **`fix all`** — real bugs get fixed, suggestions get implemented, anything uncertain is undone, and non-bugs are reported back to you
+5. **Review the diff, commit yourself** — FixFleet never commits or pushes
+
+### With your issue tracker
+
+1. **Get an access token** for your tracker — [full guides below](#-connect-your-tracker-token-setup-guides)
+2. **Configure** → Bug Source: **Issue Tracker** → pick provider → paste token + project URL → save
+3. **Click any bug** in the sidebar → **✨ Fix This Bug with AI** — or select several and batch-fix
+4. **Review the diff, commit yourself**
 
 ---
 
@@ -299,24 +307,34 @@ Example: `janedoe:ATBBxxxxxxxxxxxxxxxx`
 ## 🧠 How it works
 
 ```
-┌─ Open bug issue (GitHub / GitLab / Jira / Linear / Bitbucket / Azure DevOps)
+┌─ Bug source: tracker issue (GitHub / GitLab / Jira / Linear / Bitbucket / Azure DevOps)
+│            OR a bug file (Excel / Word / PDF — screenshots included, no token needed)
 │
-├─ Parse: description, steps, expected/actual, stack traces, logs
+├─ Parse: description, steps, expected/actual, stack traces, logs, embedded screenshots
+│
+├─ QA check: does this item belong to THIS project? (wrong-project items are
+│            reported to you, never "fixed")
 │
 ├─ Locate: extract file paths, symbols, stack frames → rank candidates → inline top file
 │
 ├─ Dispatch to AI agent (Claude / Codex / Gemini / Cursor / Aider / Qwen / any free API)
+│   The AI decides: defect → fix it · suggestion → implement it ·
+│   code already correct → change nothing, tell you why
 │
-├─ Score confidence: diff focus + self-rating + file relevance + hedge density
+├─ Keep or undo: only solid fixes are kept — anything uncertain is reverted
+│                automatically and marked "needs review"
 │
-└─ Done — local-only changes ready for your review
+└─ Done — local-only changes + a bug ledger (fixed / needs review / not a bug /
+          not this project), ready for your review
 ```
+
+**Chat-driven**: the 💬 chat panel runs this whole flow conversationally — `load bugs.xlsx`, `fix all`, `status`.
 
 **Token-aware**: per-issue, session, and daily budgets prevent paid-plan overruns.
 
 **Multi-backend**: detected CLI agents shown as installed; pick one per session.
 
-**Confidence scored**: every fix gets a 0.0–1.0 score so you know which to review first.
+**Nothing fixed twice**: a persistent ledger tracks every bug across sources, catches duplicates, and remembers what's done.
 
 ---
 
@@ -351,19 +369,22 @@ One OpenAI-compatible client serves all:
 ## 🎯 Why FixFleet
 
 ### vs. doing it manually
-Triages 50 bugs in the time it takes you to read 5.
+Triages 50 bugs in the time it takes you to read 5 — and tells you which ones aren't even bugs.
 
 ### vs. AI inside the issue (e.g. GitLab Duo, GitHub Copilot Workspace)
 - **Costs nothing extra** — uses AI plans you already pay for
+- **Works without a tracker at all** — your QA team's Excel sheet is enough
 - **Edits actual files locally**, not just comments
 - **You pick the AI** — not locked to one vendor
 - **One tool for all trackers** — GitHub + GitLab + Jira + Linear + Bitbucket + Azure DevOps
 - **Works on private/self-hosted instances** without exposing source to a SaaS
 
 ### vs. running Claude/Codex CLI manually
-- **Structured prompts** — extracts steps/logs automatically
+- **Structured prompts** — extracts steps, logs, and screenshots automatically
 - **Pre-narrows file scope** — saves 60–80% tokens
-- **Confidence scoring** — review only uncertain fixes
+- **Keeps only solid fixes** — anything uncertain is undone automatically, so a bulk run can't wreck your tree
+- **QA gate built in** — wrong-project items and not-actually-bugs get reported, not "fixed"
+- **Bug ledger** — batch 50 bugs without fixing anything twice
 - **Budget caps** — never blows through paid quotas
 
 ---
@@ -392,8 +413,8 @@ Opt out anytime:
 <summary><b>What's the difference between the VSCode extension and the CLI?</b></summary>
 
 Same engine, two interfaces:
-- **CLI** (`pip install fixfleet`) — interactive terminal flow, beautiful styled output. The guided interactive mode currently supports GitLab; for the other trackers use the JSON flags (`fixfleet --list-bugs-json --provider github ...`) or the extension.
-- **VSCode extension** — premium UI sidebar + click-to-fix workflow for all 6 trackers, calls the CLI under the hood
+- **CLI** (`pip install fixfleet`) — interactive terminal flow (GitLab), plus flags for everything: `--file bugs.xlsx --auto-fix` fixes a bug file in one command; `--list-bugs-json --provider github ...` for the other trackers.
+- **VSCode extension** — premium UI sidebar, 💬 chat, and click-to-fix workflow for all 6 trackers and bug files; calls the CLI under the hood
 
 Install both if you want flexibility. Extension auto-installs the CLI on first run if missing.
 
@@ -403,6 +424,24 @@ Install both if you want flexibility. Extension auto-installs the CLI on first r
 <summary><b>Will it ever commit or push my changes?</b></summary>
 
 Never. FixFleet edits files locally and leaves your working tree dirty. You review the diff (`git diff`), then commit + push manually. This is intentional — AI fixes need human review before shipping.
+
+</details>
+
+<details>
+<summary><b>Can I use it without any issue tracker?</b></summary>
+
+Yes — that's the fastest path. Switch Bug Source to **Local bug files (Chat)**, load an **Excel (.xlsx), Word (.docx), or PDF** bug list (any column layout — headers are mapped automatically, embedded screenshots are extracted for the AI to look at), and say `fix all`. No tracker account, no token. PDF needs one optional extra: `pip install "fixfleet[files]"`.
+
+</details>
+
+<details>
+<summary><b>What happens to items that aren't real bugs?</b></summary>
+
+FixFleet doesn't blindly "fix" everything on the list:
+- **Suggestions / feature requests** (however they're phrased) get **implemented**
+- **Reports where the code is actually correct** — the AI inspects the code first and tells you *"checked the code — no defect found"* instead of changing things
+- **Items that don't belong to your project** (wrong files/components) are flagged with a warning and skipped
+- **Uncertain fixes are undone automatically** and marked "needs review" — a bulk run can never wreck your working tree
 
 </details>
 
