@@ -64,6 +64,7 @@ def parse_docx(path: str) -> list:
             except ValueError:
                 continue
             if bugs:
+                _attach_docx_media(path, bugs)
                 return bugs
 
     # Free-form document → heuristic/AI text extraction.
@@ -74,4 +75,11 @@ def parse_docx(path: str) -> list:
             "No bugs recognized in the document. Use a table with a Title "
             "column, or numbered items / 'Bug:' headings in the text.",
         )
+    _attach_docx_media(path, bugs)
     return bugs
+
+
+def _attach_docx_media(path: str, bugs: list):
+    from .media import attach_screenshots, extract_from_zip_office
+    saved, _ = extract_from_zip_office(path, "word/media/")
+    attach_screenshots(bugs, saved, {})

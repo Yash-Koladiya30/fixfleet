@@ -328,7 +328,8 @@ class TestChat(unittest.TestCase):
 
     def test_help(self):
         out = self.chat.handle_message("help")
-        self.assertIn("fix all confident", out["reply"])
+        self.assertIn("fix all", out["reply"])
+        self.assertNotIn("confiden", out["reply"])  # internals stay hidden from users
         self.assertIsNone(out["action"])
 
     def test_load_file_then_fix_all(self):
@@ -355,7 +356,7 @@ class TestChat(unittest.TestCase):
 
     def test_set_threshold_and_status(self):
         out = self.chat.handle_message("set threshold 0.85")
-        self.assertIn("0.85", out["reply"])
+        self.assertIn("stricter", out["reply"])
         out = self.chat.handle_message("fix everything")
         self.assertEqual(out["action"]["min_confidence"], 0.85)
 
@@ -375,3 +376,93 @@ class TestChat(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+# ── Triage (QA gate) ───────────────────────────────────────────
+
+class TestTriage(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        Path(self.tmp, "auth.py").write_text("def login(): pass\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _t(self, bugs):
+        from bugfixer.triage import triage
+        return triage(bugs, self.tmp, use_ai=False)
+
+    def test_real_bug_passes(self):
+        v = self._t([{"iid": 1, "title": "login() crashes with TypeError",
+                      "description": "auth.py raises TypeError on empty user"}])
+        self.assertEqual(v[0]["verdict"], "bug")
+
+    def test_feature_request_flagged(self):
+        v = self._t([{"iid": 2, "title": "Feature request: add dark mode",
+                      "description": "Would be nice to support dark mode please add"}])
+        self.assertEqual(v[0]["verdict"], "not_a_bug")
+
+    def test_question_flagged(self):
+        v = self._t([{"iid": 3, "title": "How do I configure the app?",
+                      "description": "Question: is it possible to change the port"}])
+        self.assertEqual(v[0]["verdict"], "not_a_bug")
+
+    def test_irrelevant_project_flagged(self):
+        v = self._t([{"iid": 4, "title": "PaymentGatewayService throws error in checkout.swift",
+                      "description": "File \"billing/stripe_handler.py\", line 10, in charge"}])
+        self.assertEqual(v[0]["verdict"], "not_relevant")
+
+    def test_autofix_skips_non_bugs(self):
+        from bugfixer import autofix
+        import subprocess as sp
+        repo = os.path.join(self.tmp, "repo")
+        os.makedirs(repo)
+        sp.run(["git", "init", "-q"], cwd=repo, check=True)
+        sp.run(["git", "config", "user.email", "t@t"], cwd=repo)
+        sp.run(["git", "config", "user.name", "t"], cwd=repo)
+        Path(repo, "app.py").write_text("x = 1\n")
+        sp.run(["git", "add", "-A"], cwd=repo, check=True)
+        sp.run(["git", "commit", "-qm", "init"], cwd=repo, check=True)
+        with patch("bugfixer.buglist.LIST_PATH", Path(self.tmp) / "ledger.json"), \
+             patch("bugfixer.triage._ai_refine", return_value={}):
+            backend = FakeBackend(repo, make_change=True, report_confidence="9")
+            summary = autofix.run_autofix(
+                [{"iid": 1, "title": "Feature request: please add CSV export",
+                  "description": "would be great", "labels": [], "web_url": ""}],
+                "file:t", repo, backend)
+        self.assertEqual(summary["total"], 0)
+        self.assertEqual(len(summary["alerts"]), 1)
+        self.assertEqual(summary["alerts"][0]["verdict"], "not_a_bug")
+
+
+# ── Screenshot extraction ──────────────────────────────────────
+
+class TestMedia(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_xlsx_with_embedded_image(self):
+        p = os.path.join(self.tmp, "bugs.xlsx")
+        make_xlsx(p, [["ID", "Title"], ["1", "Broken layout on settings page"]])
+        # Inject an image into the existing zip (file-level, no drawing anchor)
+        with zipfile.ZipFile(p, "a") as z:
+            z.writestr("xl/media/image1.png", b"\x89PNG\r\n\x1a\nfakepng")
+        with patch("bugfixer.files.media.MEDIA_ROOT", Path(self.tmp) / "media"):
+            bugs = parse_bug_file(p)
+        self.assertEqual(len(bugs), 1)
+        self.assertIn("Screenshots", bugs[0]["description"])
+        shot = bugs[0]["screenshots"][0]
+        self.assertTrue(Path(shot).is_file())
+
+    def test_docx_with_embedded_image(self):
+        p = os.path.join(self.tmp, "bugs.docx")
+        make_docx(p, ["1. Header overlaps the menu on mobile screens"])
+        with zipfile.ZipFile(p, "a") as z:
+            z.writestr("word/media/shot.png", b"\x89PNG\r\n\x1a\nfake")
+        with patch("bugfixer.files.media.MEDIA_ROOT", Path(self.tmp) / "media"):
+            bugs = parse_bug_file(p)
+        self.assertEqual(len(bugs), 1)
+        self.assertIn("Screenshots", bugs[0]["description"])

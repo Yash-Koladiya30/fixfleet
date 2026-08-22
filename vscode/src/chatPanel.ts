@@ -236,7 +236,7 @@ export class ChatPanel {
                     projectDir,
                     provider,
                 });
-                this.statusDone(this.fixOneText(result, String(action.iid)), !result.success);
+                this.statusDone(this.fixOneText(result), !result.success);
             }
         } catch (e) {
             this.statusDone(`⚠ Action failed: ${(e as Error).message}`, true);
@@ -248,22 +248,41 @@ export class ChatPanel {
             return `⚠ Auto-fix failed: ${s?.error || 'unknown error'}`;
         }
         const n = (v: any) => (typeof v === 'number' ? v : 0);
-        const parts = [
-            `${n(s.kept)} kept`,
-            `${n(s.reverted)} reverted (low confidence)`,
-            `${n(s.failed)} failed`,
-        ];
-        if (n(s.skipped)) parts.push(`${n(s.skipped)} skipped`);
-        return `Done: ${parts.join(', ')} — ${n(s.total)} bug(s) processed.`;
+        // Human wording only — internal scoring machinery is never surfaced.
+        const parts = [`✅ Fixed ${n(s.kept)} bug(s).`];
+        if (n(s.reverted) > 0) {
+            parts.push(`↩️ ${n(s.reverted)} couldn't be fixed confidently — changes were undone and they're marked for review.`);
+        }
+        if (n(s.failed) > 0) {
+            parts.push(`⚠️ ${n(s.failed)} couldn't be fixed — marked for review.`);
+        }
+        if (n(s.skipped) > 0) {
+            parts.push(`⏭️ ${n(s.skipped)} skipped (already fixed or duplicates).`);
+        }
+        // QA triage gate: items the CLI declined to touch. The raw verdict
+        // tokens (not_a_bug / not_relevant) are never shown — only the
+        // user-friendly reason. Text is escaped webview-side before innerHTML.
+        const alerts = Array.isArray(s.alerts) ? s.alerts : [];
+        if (alerts.length) {
+            parts.push('');
+            parts.push("🔍 QA check — I didn't touch these:");
+            for (const a of alerts) {
+                const iid = String(a?.iid ?? '');
+                const title = String(a?.title || '');
+                const reason = String(a?.reason || '');
+                const warn = a?.verdict === 'not_relevant' ? '⚠️ ' : '';
+                parts.push(`• #${iid} ${title} — ${warn}${reason}`);
+            }
+            parts.push('If any of these ARE real bugs for this project, edit their description and try again.');
+        }
+        return parts.join('\n');
     }
 
-    private fixOneText(r: FixResult, iid: string): string {
-        const label = r.confidence?.label || 'n/a';
-        const pct = Math.round((r.confidence?.final_score || 0) * 100);
+    private fixOneText(r: FixResult): string {
         if (r.success) {
-            return `✓ Fixed #${iid} — confidence ${label} (${pct}%). Fix kept.`;
+            return '✅ Fix applied — review the diff with git diff when ready.';
         }
-        return `⚠ #${iid}: ${r.error || 'fix uncertain'} — confidence ${label}. Fix not kept (reverted).`;
+        return "↩️ I wasn't sure about this one, so I undid the changes and marked it for review.";
     }
 
     private esc(s: string): string {
@@ -629,11 +648,11 @@ export class ChatPanel {
     <button class="chip" data-send="help">Help</button>
     <button class="chip" data-act="pick">📎 Load file</button>
     <button class="chip" data-send="list bugs">List bugs</button>
-    <button class="chip" data-send="fix all confident">Fix all confident</button>
+    <button class="chip" data-send="fix all">✨ Fix all bugs</button>
     <button class="chip" data-send="status">Status</button>
 </div>
 <footer class="composer">
-    <input id="input" type="text" placeholder="e.g. fix all bugs above 70% confidence…  (↑↓ for history)" />
+    <input id="input" type="text" placeholder="e.g. fix all bugs…  (↑↓ for history)" />
     <button class="btn btn-primary" id="send-btn">Send</button>
 </footer>
 
@@ -653,8 +672,7 @@ export class ChatPanel {
         '<li>📎 Load bugs from Excel / Word / PDF — click the clip or type <code>load &lt;path&gt;</code></li>' +
         '<li>📋 <code>list bugs</code> / <code>status</code> — see everything tracked</li>' +
         '<li>✨ <code>fix #3</code> — fix one bug</li>' +
-        '<li>🛡️ <code>fix all confident</code> — auto-fix, keeps only high-confidence fixes and reverts the rest</li>' +
-        '<li>⚙️ <code>set threshold 0.8</code> — raise/lower the bar</li>' +
+        '<li>✨ <code>fix all</code> — fixes every open bug; I only keep solid fixes and undo anything uncertain</li>' +
         '</ul>' +
         '<div class="guide-tip">Tip: press ↑ to recall past prompts.</div>';
 

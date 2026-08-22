@@ -18,7 +18,8 @@ from pathlib import Path
 
 LIST_PATH = Path.home() / ".fixfleet-buglist.json"
 
-STATUSES = ("new", "fixing", "fixed", "failed", "skipped", "duplicate")
+STATUSES = ("new", "fixing", "fixed", "failed", "skipped", "duplicate",
+            "not_a_bug", "not_relevant")
 
 
 def _load() -> dict:

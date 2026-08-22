@@ -33,4 +33,9 @@ def parse_pdf(path: str) -> list:
             "'Bug:' style headings; export from your tracker as a table "
             "PDF, or use Excel for best results.",
         )
+
+    from .media import attach_screenshots, extract_pdf_images
+    images = extract_pdf_images(path)
+    if images:
+        attach_screenshots(bugs, {Path(p).name: p for p in images}, {})
     return bugs

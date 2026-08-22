@@ -166,12 +166,33 @@ def run_autofix(bugs: list, source: str, project_dir: str, backend,
     buglist.sync(source, bugs)
     telemetry.track("auto_fix_run", {"count": len(bugs), "backend": backend.name})
 
+    # QA triage gate — only genuine, project-relevant bugs get fixed. Items
+    # judged not-a-bug or not-relevant are reported back as alerts instead.
+    from .triage import triage as run_triage
+    verdicts = run_triage(bugs, project_dir)
+    alerts = []
+    fixable = []
+    for bug, v in zip(bugs, verdicts):
+        if v["verdict"] in ("not_a_bug", "not_relevant"):
+            key = buglist.bug_key(source, bug.get("iid"), bug.get("title", ""))
+            buglist.mark(key, v["verdict"])
+            alerts.append({
+                "iid": str(bug.get("iid")),
+                "title": bug.get("title", "")[:80],
+                "verdict": v["verdict"],
+                "reason": v["reason"],
+            })
+        else:
+            fixable.append((bug, v))
+
     results = []
-    for bug in bugs:
+    for bug, v in fixable:
         if max_bugs and len([r for r in results if r.outcome != "skipped"]) >= max_bugs:
             break
         r = fix_one(bug, source, project_dir, backend,
                     min_confidence=min_confidence, locator_cfg=locator_cfg)
+        if v["verdict"] == "unclear" and v["reason"]:
+            r.reason = (r.reason + "; " if r.reason else "") + v["reason"]
         results.append(r)
         if progress:
             progress(r)
@@ -184,6 +205,7 @@ def run_autofix(bugs: list, source: str, project_dir: str, backend,
         "reverted": len([r for r in results if r.outcome == "reverted"]),
         "failed": len([r for r in results if r.outcome == "failed"]),
         "skipped": len([r for r in results if r.outcome == "skipped"]),
+        "alerts": alerts,
         "min_confidence": min_confidence,
         "results": [r.__dict__ for r in results],
     }

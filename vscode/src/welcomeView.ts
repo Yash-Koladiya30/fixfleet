@@ -418,14 +418,14 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
                     <div class="step-num">3</div>
                     <div class="step-body">
                         <div class="step-title">Click any bug → Fix</div>
-                        <div class="step-text">AI reads code, fixes locally, scores confidence.</div>
+                        <div class="step-text">AI reads code, fixes locally, keeps only solid fixes.</div>
                     </div>
                 </div>
                 <div class="step">
                     <div class="step-num">💬</div>
                     <div class="step-body">
                         <div class="step-title">Chat with FixFleet</div>
-                        <div class="step-text">Load bug files (Excel · Word · PDF), then say 'fix all confident' — the bot fixes bugs and keeps only high-confidence changes.</div>
+                        <div class="step-text">Load bug files (Excel · Word · PDF), then say 'fix all' — the bot fixes bugs, keeps only solid fixes and undoes anything uncertain.</div>
                     </div>
                 </div>
 
@@ -689,10 +689,22 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
     /** Chat-driven mode: render the file-based bug ledger (no token needed). */
     private renderFileMode(): string {
         const s = this.fileSummary || {};
-        const statuses = ['new', 'fixing', 'fixed', 'failed', 'skipped', 'duplicate'];
+        const statuses = ['new', 'fixing', 'fixed', 'failed', 'skipped', 'duplicate', 'not_a_bug', 'not_relevant'];
+        // User-facing wording — internal status keys stay as CSS classes only
+        // (raw verdict tokens like not_a_bug are never shown to the user).
+        const statusLabels: Record<string, string> = {
+            new: 'Open',
+            fixing: 'Fixing…',
+            fixed: 'Fixed',
+            failed: 'Needs review',
+            skipped: 'Skipped',
+            duplicate: 'Duplicate',
+            not_a_bug: 'Not a bug',
+            not_relevant: 'Not this project',
+        };
         const chips = statuses
             .filter(k => (s[k] || 0) > 0)
-            .map(k => `<div class="summary-pill st-${k}">${s[k]} ${this.escape(k)}</div>`)
+            .map(k => `<div class="summary-pill st-${k}">${s[k]} ${this.escape(statusLabels[k].toLowerCase())}</div>`)
             .join('');
 
         const top = `
@@ -725,19 +737,15 @@ function send(cmd, extra) { vscode.postMessage({cmd, ...(extra||{})}); }
             .map(b => {
                 const status = String(b.status || 'new').toLowerCase();
                 const badgeCls = statuses.includes(status) ? status : 'new';
-                const conf = typeof b.last_confidence === 'number'
-                    ? `${Math.round(b.last_confidence * 100)}%`
-                    : '';
                 return `
                     <div class="bug-card file-bug" data-chat-open="1">
                         <div class="bug-row">
                             <div class="bug-iid">#${this.escape(String(b.iid ?? ''))}</div>
-                            <span class="badge-status st-${badgeCls}">${this.escape(status.toUpperCase())}</span>
+                            <span class="badge-status st-${badgeCls}">${this.escape(statusLabels[badgeCls])}</span>
                         </div>
                         <div class="bug-title">${this.escape(b.title || '')}</div>
                         <div class="bug-meta">
                             ${b.source ? `<span>📄 ${this.escape(b.source)}</span>` : ''}
-                            ${conf ? `<span>🎯 ${conf}</span>` : ''}
                         </div>
                     </div>
                 `;
@@ -1427,6 +1435,8 @@ const STYLES = `
     .badge-status.st-failed    { background: rgba(177, 79, 88, 0.25); color: var(--ff-burgundy); border-color: rgba(177, 79, 88, 0.4); }
     .badge-status.st-skipped   { background: rgba(240, 230, 210, 0.06); color: var(--ff-sage); opacity: 0.7; }
     .badge-status.st-duplicate { background: rgba(240, 230, 210, 0.06); color: var(--ff-sage); opacity: 0.7; font-style: italic; }
+    .badge-status.st-not_a_bug { background: rgba(240, 230, 210, 0.06); color: var(--ff-sage); opacity: 0.7; }
+    .badge-status.st-not_relevant { background: rgba(212, 165, 116, 0.18); color: var(--ff-amber); border-color: rgba(212, 165, 116, 0.45); }
 
     .summary-pill.st-new       { background: rgba(138, 168, 138, 0.18); border-color: rgba(138, 168, 138, 0.45); color: var(--ff-sage); }
     .summary-pill.st-fixing    { background: rgba(212, 193, 156, 0.18); border-color: rgba(212, 193, 156, 0.45); color: var(--ff-champagne); }
@@ -1435,6 +1445,8 @@ const STYLES = `
     .summary-pill.st-skipped,
     .summary-pill.st-duplicate { color: var(--ff-sage); opacity: 0.7; }
     .summary-pill.st-duplicate { font-style: italic; }
+    .summary-pill.st-not_a_bug { color: var(--ff-sage); opacity: 0.7; }
+    .summary-pill.st-not_relevant { background: rgba(212, 165, 116, 0.18); border-color: rgba(212, 165, 116, 0.45); color: var(--ff-amber); }
 
     /* ── Queue progress bar ───────────────────────────────── */
 

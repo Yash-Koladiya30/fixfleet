@@ -25,8 +25,7 @@ HELP_TEXT = (
     "• `list bugs` — show tracked bugs and statuses\n"
     "• `status` — summary counts\n"
     "• `fix #3` — fix one bug\n"
-    "• `fix all confident` — auto-fix, keeping only high-confidence fixes\n"
-    "• `set threshold 0.8` — change the confidence bar\n"
+    "• `fix all` — fix every open bug (I only keep solid fixes and undo anything uncertain)\n"
     "• `skip #3` — mark a bug skipped"
 )
 
@@ -58,10 +57,15 @@ def _save_session(s: dict):
         pass
 
 
+_STATUS_LABELS = {
+    "new": "open", "fixing": "fixing…", "fixed": "fixed",
+    "failed": "needs review", "skipped": "skipped", "duplicate": "duplicate",
+}
+
+
 def _fmt_bug_line(e: dict) -> str:
-    conf = e.get("last_confidence")
-    conf_s = f" (confidence {conf:.2f})" if isinstance(conf, (int, float)) else ""
-    return f"• #{e.get('iid')} [{e.get('status')}] {e.get('title', '')[:70]}{conf_s}"
+    label = _STATUS_LABELS.get(e.get("status", ""), e.get("status", ""))
+    return f"• #{e.get('iid')} [{label}] {e.get('title', '')[:70]}"
 
 
 def _load_file(path: str) -> dict:
@@ -84,7 +88,7 @@ def _load_file(path: str) -> dict:
         "reply": (f"Loaded {len(bugs)} open bug(s) from {Path(path).name} "
                   f"({stats['added']} new, {stats['known']} already tracked, "
                   f"{stats['duplicates']} duplicates).\n{lines}{more}\n\n"
-                  "Say `fix all confident` to auto-fix, or `fix #<id>` for one."),
+                  "Say `fix all` to fix everything, or `fix #<id>` for one."),
         "action": None,
     }
 
@@ -130,11 +134,12 @@ def handle_message(message: str) -> dict:
 
     tm = _THRESHOLD_RE.search(msg)
     if tm and "threshold" in msg.lower() or (tm and "set" in msg.lower()):
+        # Power-user command — works but isn't advertised in help.
         val = max(0.0, min(1.0, float(tm.group(1))))
         s["min_confidence"] = val
         _save_session(s)
-        return done(f"Confidence threshold set to {val:.2f}. "
-                    "Auto-fix will keep only fixes scoring at or above it.")
+        return done(f"Okay — I'll be {'stricter' if val >= 0.7 else 'more lenient'} "
+                    "about which fixes I keep.")
 
     sk = _SKIP_RE.search(msg)
     if sk:
@@ -147,8 +152,8 @@ def handle_message(message: str) -> dict:
     if _FIX_ALL_RE.search(msg):
         source = s.get("last_source", "")
         return done(
-            f"Starting auto-fix (threshold {threshold:.2f}) — I'll keep only "
-            "high-confidence fixes and revert the rest. Watch progress below.",
+            "Starting fixes — I'll apply a change only when the fix is solid, "
+            "and undo anything uncertain so your code stays safe. Watch progress below.",
             action={"type": "auto_fix", "source": source,
                     "file": s.get("last_file", ""), "min_confidence": threshold},
         )
@@ -180,8 +185,8 @@ def handle_message(message: str) -> dict:
         counts = buglist.summary()
         if not counts:
             return done("Nothing tracked yet — load a bug file or fetch from a tracker.")
-        parts = ", ".join(f"{v} {k}" for k, v in sorted(counts.items()))
-        return done(f"Bug status: {parts}. Threshold: {threshold:.2f}.")
+        parts = ", ".join(f"{v} {_STATUS_LABELS.get(k, k)}" for k, v in sorted(counts.items()))
+        return done(f"Bug status: {parts}.")
 
     # Regex didn't understand → AI fallback, re-dispatch once.
     ai = _ai_intent(msg)
@@ -192,7 +197,7 @@ def handle_message(message: str) -> dict:
         "list": "list bugs",
         "status": "status",
         "fix_one": f"fix #{arg}",
-        "fix_all": "fix all confident",
+        "fix_all": "fix all",
         "set_threshold": f"set threshold {arg}",
         "skip": f"skip #{arg}",
     }.get(intent)

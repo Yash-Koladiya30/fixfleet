@@ -103,4 +103,9 @@ def parse_xlsx(path: str) -> list:
             "no_bugs_found",
             "No open bugs found in the sheet (rows with closed/fixed status are skipped).",
         )
+
+    # Attach embedded screenshots (row-anchored where the sheet pins them).
+    from .media import attach_screenshots, extract_from_zip_office
+    saved, anchors = extract_from_zip_office(path, "xl/media/")
+    attach_screenshots(bugs, saved, anchors, header_rows=1)
     return bugs
