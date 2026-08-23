@@ -108,8 +108,8 @@ Premium natural palette extracted from the FixFleet icon:
 
 ## 📝 License
 
-**GNU General Public License v3.0 or later (GPL-3.0-or-later)** — see [LICENSE](LICENSE).
+**FixFleet Source-Available License** — see [LICENSE](LICENSE).
 
-Derivative works must also be open-source under GPL-3. No closed-source forks.
+Free to install and use, personal or commercial. The source is public to read, but copying, modifying, forking, or redistributing the code is not permitted. Versions released on or before 23 Aug 2026 remain under their original GPL-3.0 license.
 
 Built by [Yash Koladiya](https://github.com/Yash-Koladiya30). © 2026.

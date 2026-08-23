@@ -11,7 +11,7 @@
 <p>
   <a href="https://pypi.org/project/fixfleet/"><img src="https://img.shields.io/pypi/v/fixfleet.svg?label=pypi&color=2D6A4F&style=for-the-badge" alt="PyPI" /></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=YashKoladiya30.fixfleet"><img src="https://img.shields.io/visual-studio-marketplace/v/YashKoladiya30.fixfleet?label=vscode&color=722F37&style=for-the-badge" alt="VSCode Marketplace" /></a>
-  <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/license-GPL_v3-C8A47E?style=for-the-badge" alt="License GPL v3" /></a>
+  <a href="https://github.com/Yash-Koladiya30/fixfleet/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Source--Available-C8A47E?style=for-the-badge" alt="Source-Available License" /></a>
   <img src="https://img.shields.io/badge/python-3.9+-1F2421?style=for-the-badge" alt="Python 3.9+" />
 </p>
 
@@ -490,7 +490,7 @@ Those are **autocomplete + chat** tools. FixFleet is a **bug-triage automator** 
 <details>
 <summary><b>Is my code sent to FixFleet servers?</b></summary>
 
-There are no FixFleet servers. Your code goes from your machine → directly to whichever AI provider you pick (Anthropic / OpenAI / Google / Groq / Ollama / etc.) using your own credentials. FixFleet is open-source — read the code and verify.
+There are no FixFleet servers. Your code goes from your machine → directly to whichever AI provider you pick (Anthropic / OpenAI / Google / Groq / Ollama / etc.) using your own credentials. FixFleet's source is public — read the code and verify.
 
 </details>
 
@@ -507,9 +507,9 @@ There are no FixFleet servers. Your code goes from your machine → directly to 
 
 ## 📜 License
 
-**GPL-3.0-or-later** — see [LICENSE](LICENSE).
+**FixFleet Source-Available License** — see [LICENSE](LICENSE).
 
-This means anyone can use, study, modify, and redistribute FixFleet — but **derivative works must also be open-source under GPL-3**. No closed-source forks. No proprietary repackaging.
+Anyone can install and use FixFleet free of charge, personally or commercially, and read the source. Copying, modifying, forking, or redistributing the code is **not permitted** — all rights reserved. (Versions released on or before 23 Aug 2026 remain available under their original GPL-3.0 license.)
 
 Built by **[Yash Koladiya](https://github.com/Yash-Koladiya30)** • © 2026.
 

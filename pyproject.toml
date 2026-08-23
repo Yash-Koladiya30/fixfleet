@@ -8,8 +8,7 @@ version = "0.5.3"
 description = "Auto-fix bugs from GitHub, GitLab, Jira, Linear, Bitbucket, Azure DevOps — or any Excel/Word/PDF bug list — with AI agents. Keeps only solid fixes, reports non-bugs. Bring your own CLI or free API."
 readme = "README.md"
 requires-python = ">=3.9"
-license = "GPL-3.0-or-later"
-license-files = ["LICENSE"]
+license = {file = "LICENSE"}
 authors = [
     { name = "Yash Koladiya" },
 ]
